@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configurador 3D - Moveis Parametricos</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1 id="product-name">Configurador de Moveis 3D</h1>
+  </header>
+
+  <main class="layout">
+    <section class="viewer-wrap">
+      <div id="canvas-container">
+        <canvas id="canvas"></canvas>
+      </div>
+      <div id="overlay">
+        <p>Carregando modelo 3D...</p>
+      </div>
+      <div id="status-bar">
+        <div class="price-box">
+          <span>Preco estimado:</span>
+          <strong id="price">-</strong>
+        </div>
+        <ul id="warnings" class="warnings"></ul>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/viewer-loader.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/shapediver.js"></script>
+  <script src="js/constraints.js"></script>
+  <script src="js/pricing.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/room.js"></script>
+  <script src="js/menu.js"></script>
+</body>
+</html>

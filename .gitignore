@@ -1,0 +1,10 @@
+# js/vendor/
+# Bundles locais (ex.: ShapeDiver viewer) ficam fora do repositório por licença e tamanho.
+# O app tenta carregá-los daqui primeiro (rede sem CDN) e depois cai nos CDNs oficiais.
+js/vendor/
+
+# Backup local do config com o ticket real (nunca versionar).
+js/config.ticket.bak.js
+
+# Config local com o ticket do modelo (use config.example.js como base).
+js/config.js
