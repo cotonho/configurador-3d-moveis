@@ -32,8 +32,7 @@ room: {
       enabled: true,
       hiddenOpacity: 0,
       visibleOpacity: 1,
-      smoothness: 0.1,
-      insideMargin: 30
+      smoothness: 0.1
     },
     debug: true,
     furnitureCenter: null

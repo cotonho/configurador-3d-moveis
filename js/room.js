@@ -166,9 +166,8 @@
     floorTarget.copy(center);
     floorTarget.z = room.position.z + 1;
     const tmp = new THREE.Vector3();
-    const tmp3 = new THREE.Vector3();
     const camPos = new THREE.Vector3();
-    const hit = new THREE.Vector3();
+    const raycaster = new THREE.Raycaster();
     const furnitureBox = new THREE.Box3();
     let lastCenterUpdate = 0;
     const targetVec = new THREE.Vector3();
@@ -424,45 +423,28 @@
 
       if (WALL_CULLING_ENABLED) {
         const targets = [center, floorTarget];
-        const insideMargin =
-          typeof wallCulling.insideMargin === "number"
-            ? wallCulling.insideMargin
-            : WALL_THICKNESS * 2;
         walls.forEach((wall) => {
-          const wallPos = tmp3.copy(wall.position).add(room.position);
-          const n = wall.userData.normal;
-          const nPlane = n.dot(wallPos);
-          let between = false;
-
-          for (let i = 0; i < targets.length && !between; i++) {
-            const target = targets[i];
-            const lineDir = tmp.copy(target).sub(camPos);
-            const denom = lineDir.dot(n);
-            if (Math.abs(denom) < 1e-6) {
-              continue;
-            }
-
-            const camSide = n.dot(camPos) - nPlane;
-            const tgtSide = n.dot(target) - nPlane;
-            const opposite = camSide * tgtSide < 0;
-            const justInside =
-              camSide * tgtSide > 0 && Math.abs(camSide) < insideMargin;
-            if (!opposite && !justInside) {
-              continue;
-            }
-
-            const tLine = (nPlane - n.dot(camPos)) / denom;
-            hit.copy(camPos).addScaledVector(lineDir, tLine);
-            const along = wall.userData.along;
-            const dAlong = Math.abs(hit[along] - wallPos[along]);
-            const dZ = Math.abs(hit.z - wallPos.z);
-            between =
-              dAlong < wall.userData.halfSpanAlong &&
-              dZ < wall.userData.halfSpanZ;
+          wall.userData.hidden = false;
+        });
+        targets.forEach((target) => {
+          const rayDir = tmp.copy(target).sub(camPos);
+          const targetDist = rayDir.length();
+          if (targetDist < 1e-6) {
+            return;
           }
+          rayDir.normalize();
 
-          wall.userData.hidden = between;
-          wall.visible = !between;
+          raycaster.set(camPos, rayDir);
+          raycaster.near = 1;
+          raycaster.far = Math.max(1, targetDist - 1);
+
+          const hits = raycaster.intersectObjects(walls, false);
+          hits.forEach((hit) => {
+            hit.object.userData.hidden = true;
+          });
+        });
+        walls.forEach((wall) => {
+          wall.visible = !wall.userData.hidden;
         });
       }
 
