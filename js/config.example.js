@@ -28,8 +28,18 @@ room: {
     furnitureScale: 3,
     position: [0, 0, 0],
     hideScenery: true,
-    transparentOpacity: 0,
-    opaqueOpacity: 1,
+    wallCulling: {
+      enabled: true,
+      hiddenOpacity: 0,
+      visibleOpacity: 1,
+      smoothness: 0.1
+    },
+    cameraRestrictions: {
+      enabled: true,
+      zoomMin: 20,
+      zoomMax: 5000,
+      sphereRadius: "auto"
+    },
     debug: true,
     furnitureCenter: null
   }
