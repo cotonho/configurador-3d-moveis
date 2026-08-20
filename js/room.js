@@ -93,6 +93,12 @@
     if (!viewport) {
       throw new Error("Viewport indisponivel para criar a sala.");
     }
+    if (viewport.groundPlaneVisibility !== undefined) {
+      viewport.groundPlaneVisibility = false;
+    }
+    if (viewport.contactShadowVisibility !== undefined) {
+      viewport.contactShadowVisibility = false;
+    }
 
     const scene =
       (viewport.threeJsCoreObjects && viewport.threeJsCoreObjects.scene) ||
@@ -125,9 +131,9 @@
     room.add(floor);
 
     const wallDefs = [
-      { pos: [0, -DEPTH / 2 + WALL_THICKNESS / 2, HEIGHT / 2], size: [WIDTH, WALL_THICKNESS, HEIGHT], normal: [0, 1, 0], name: "back", halfX: WIDTH / 2, halfZ: HEIGHT / 2 },
-      { pos: [-WIDTH / 2 + WALL_THICKNESS / 2, 0, HEIGHT / 2], size: [WALL_THICKNESS, DEPTH, HEIGHT], normal: [1, 0, 0], name: "left", halfX: DEPTH / 2, halfZ: HEIGHT / 2 },
-      { pos: [WIDTH / 2 - WALL_THICKNESS / 2, 0, HEIGHT / 2], size: [WALL_THICKNESS, DEPTH, HEIGHT], normal: [-1, 0, 0], name: "right", halfX: DEPTH / 2, halfZ: HEIGHT / 2 }
+      { pos: [0, -DEPTH / 2 + WALL_THICKNESS / 2, HEIGHT / 2], size: [WIDTH, WALL_THICKNESS, HEIGHT], normal: [0, 1, 0], name: "back", along: "x", halfAlong: WIDTH / 2, halfZ: HEIGHT / 2 },
+      { pos: [-WIDTH / 2 + WALL_THICKNESS / 2, 0, HEIGHT / 2], size: [WALL_THICKNESS, DEPTH, HEIGHT], normal: [1, 0, 0], name: "left", along: "y", halfAlong: DEPTH / 2, halfZ: HEIGHT / 2 },
+      { pos: [WIDTH / 2 - WALL_THICKNESS / 2, 0, HEIGHT / 2], size: [WALL_THICKNESS, DEPTH, HEIGHT], normal: [-1, 0, 0], name: "right", along: "y", halfAlong: DEPTH / 2, halfZ: HEIGHT / 2 }
     ];
 
     const walls = wallDefs.map((def) => {
@@ -137,7 +143,8 @@
         opacity: VISIBLE_OPACITY,
         side: THREE.DoubleSide,
         roughness: 0.9,
-        metalness: 0
+        metalness: 0,
+        depthWrite: false
       });
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(def.size[0], def.size[1], def.size[2]),
@@ -147,7 +154,8 @@
       mesh.userData = {
         normal: new THREE.Vector3(...def.normal),
         name: def.name,
-        halfSpanX: def.halfX,
+        along: def.along,
+        halfSpanAlong: def.halfAlong,
         halfSpanZ: def.halfZ
       };
       room.add(mesh);
@@ -274,7 +282,7 @@
 
     let debugEl = null;
 
-    function updateDebug(box) {
+    function updateDebug(box, limit) {
       if (roomConfig.debug !== true) {
         return;
       }
@@ -282,22 +290,29 @@
         debugEl = document.createElement("div");
         debugEl.id = "room-debug";
         debugEl.style.cssText =
-          "position:absolute;left:16px;bottom:64px;z-index:20;font:11px monospace;color:#1d2733;background:rgba(255,255,255,0.85);padding:6px 10px;border-radius:8px;border:1px solid #dfe5ec;";
+          "position:absolute;left:16px;bottom:64px;z-index:20;font:11px monospace;color:#1d2733;background:rgba(255,255,255,0.85);padding:6px 10px;border-radius:8px;border:1px solid #dfe5ec;white-space:pre;";
         document.body.appendChild(debugEl);
       }
-      const hidden = walls
-        .filter((w) => w.userData.hidden)
-        .map((w) => w.userData.name)
-        .join(", ") || "nenhuma";
+      const wallsState = walls
+        .map((w) => w.userData.name + ":" + (w.userData.hidden ? "S" : "N"))
+        .join(" ");
       debugEl.textContent =
-        "chao(z): " +
-        room.position.z.toFixed(2) +
-        " | fundo movel(z): " +
-        box.min.z.toFixed(2) +
+        "cam(" +
+        camPos.x.toFixed(0) +
+        "," +
+        camPos.y.toFixed(0) +
+        "," +
+        camPos.z.toFixed(0) +
+        ") | chao(z): " +
+        room.position.z.toFixed(0) +
+        " | pes(z): " +
+        box.min.z.toFixed(0) +
         " | gap: " +
-        (box.min.z - room.position.z).toFixed(2) +
-        " | ocultas: " +
-        hidden;
+        (box.min.z - room.position.z).toFixed(0) +
+        " | lim: " +
+        Math.round(limit) +
+        " | paredes: " +
+        wallsState;
     }
 
     function hideScenery(limit) {
@@ -328,11 +343,12 @@
       if (!box) {
         return;
       }
-      hideScenery(furnitureDiagLimit());
+      const limit = furnitureDiagLimit();
+      hideScenery(limit);
       box.getCenter(center);
       floorTarget.copy(center);
       floorTarget.z = room.position.z + 1;
-      updateDebug(box);
+      updateDebug(box, limit);
     }
 
     function vec3Of(obj, out) {
@@ -380,17 +396,22 @@
             const tHit = (n.dot(wallPos) - n.dot(camPos)) / denom;
             if (tHit > 0 && tHit < targetDist) {
               hit.copy(camPos).addScaledVector(rayDir, tHit);
-              const dX = Math.abs(hit.x - wallPos.x);
+              const along = wall.userData.along;
+              const dAlong = Math.abs(hit[along] - wallPos[along]);
               const dZ = Math.abs(hit.z - wallPos.z);
               between =
-                dX < wall.userData.halfSpanX && dZ < wall.userData.halfSpanZ;
+                dAlong < wall.userData.halfSpanAlong &&
+                dZ < wall.userData.halfSpanZ;
             }
           }
 
           wall.userData.hidden = between;
-          const target = between ? HIDDEN_OPACITY : VISIBLE_OPACITY;
-          wall.material.opacity +=
-            (target - wall.material.opacity) * WALL_SMOOTHNESS;
+          if (between) {
+            wall.material.opacity = HIDDEN_OPACITY;
+          } else {
+            wall.material.opacity +=
+              (VISIBLE_OPACITY - wall.material.opacity) * WALL_SMOOTHNESS;
+          }
         });
       }
 
