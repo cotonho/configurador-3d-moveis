@@ -315,6 +315,18 @@
       const wallsState = walls
         .map((w) => w.userData.name + ":" + (w.userData.hidden ? "S" : "N"))
         .join(" ");
+      const wallPositions = walls
+        .map((w) => {
+          const p = tmp.copy(w.position).add(room.position);
+          return (
+            w.userData.name +
+            ":" +
+            (w.userData.along === "x"
+              ? "y=" + Math.round(p.y)
+              : "x=" + Math.round(p.x))
+          );
+        })
+        .join(" ");
       debugEl.textContent =
         "cam(" +
         camPos.x.toFixed(0) +
@@ -324,6 +336,16 @@
         camPos.z.toFixed(0) +
         ") | dist: " +
         camPos.distanceTo(targetVec).toFixed(0) +
+        " | sala: " +
+        Math.round(WIDTH) +
+        "x" +
+        Math.round(DEPTH) +
+        "x" +
+        Math.round(HEIGHT) +
+        " | " +
+        wallPositions +
+        " | parede(z): " +
+        Math.round(HEIGHT / 2) +
         " | chao(z): " +
         room.position.z.toFixed(0) +
         " | pes(z): " +
@@ -424,7 +446,7 @@
             const tgtSide = n.dot(target) - nPlane;
             const opposite = camSide * tgtSide < 0;
             const justInside =
-              camSide < 0 && camSide > -insideMargin;
+              camSide * tgtSide > 0 && Math.abs(camSide) < insideMargin;
             if (!opposite && !justInside) {
               continue;
             }
