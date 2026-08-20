@@ -34,12 +34,6 @@ room: {
       visibleOpacity: 1,
       smoothness: 0.1
     },
-    cameraRestrictions: {
-      enabled: true,
-      zoomMin: 20,
-      zoomMax: 5000,
-      sphereRadius: "auto"
-    },
     debug: true,
     furnitureCenter: null
   }

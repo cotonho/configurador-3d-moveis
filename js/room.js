@@ -4,8 +4,6 @@
 
   const wallCulling = roomConfig.wallCulling || {};
   const WALL_CULLING_ENABLED = wallCulling.enabled !== false;
-  const cameraRestrictions = roomConfig.cameraRestrictions || {};
-  const CAM_RESTRICTIONS_ENABLED = cameraRestrictions.enabled !== false;
   const UNITS_PER_M = roomConfig.unitsPerMeter || 100;
   const WIDTH = (roomConfig.widthM || 3.2) * UNITS_PER_M;
   const DEPTH = (roomConfig.depthM || 2.8) * UNITS_PER_M;
@@ -175,7 +173,6 @@
     let lastCenterUpdate = 0;
     const targetVec = new THREE.Vector3();
     let probeSlider = null;
-    let sphereRadius = 0;
 
     function collectMeshes(obj, out) {
       obj.children.forEach((child) => {
@@ -335,8 +332,6 @@
         (box.min.z - room.position.z).toFixed(0) +
         " | lim: " +
         Math.round(limit) +
-        " | raio: " +
-        Math.round(sphereRadius) +
         " | paredes: " +
         wallsState;
     }
@@ -358,7 +353,6 @@
     function updateFurnitureCenter(now) {
       if (roomConfig.furnitureCenter) {
         center.copy(new THREE.Vector3(CENTER[0], CENTER[1], CENTER[2]));
-        applyCameraRestrictions();
         return;
       }
       if (now - lastCenterUpdate < 500) {
@@ -375,7 +369,6 @@
       box.getCenter(center);
       floorTarget.copy(center);
       floorTarget.z = room.position.z + 1;
-      applyCameraRestrictions();
       updateDebug(box, limit);
     }
 
@@ -388,50 +381,6 @@
         obj.y !== undefined ? obj.y : obj[1],
         obj.z !== undefined ? obj.z : obj[2]
       );
-    }
-
-    function applyCameraRestrictions() {
-      if (!CAM_RESTRICTIONS_ENABLED || !camera) {
-        return;
-      }
-      try {
-        if (camera.zoomRestriction) {
-          camera.zoomRestriction.minDistance =
-            cameraRestrictions.zoomMin || 20;
-          camera.zoomRestriction.maxDistance =
-            cameraRestrictions.zoomMax || 5000;
-        }
-        if (camera.spherePositionRestriction) {
-          if (
-            !cameraRestrictions.sphereRadius ||
-            cameraRestrictions.sphereRadius === "auto"
-          ) {
-            let nearest = Infinity;
-            walls.forEach((wall) => {
-              const n = wall.userData.normal;
-              const p = tmp.copy(wall.position).add(room.position);
-              const d = Math.abs(n.dot(p) - n.dot(center)) - 12;
-              if (d < nearest) {
-                nearest = d;
-              }
-            });
-            sphereRadius = Math.max(50, nearest);
-          } else {
-            sphereRadius = Number(cameraRestrictions.sphereRadius) || 460;
-          }
-          camera.spherePositionRestriction.center = [
-            center.x,
-            center.y,
-            center.z
-          ];
-          camera.spherePositionRestriction.radius = sphereRadius;
-        }
-      } catch (error) {
-        console.error(
-          "room.js: falha ao aplicar restricoes de camera.",
-          error
-        );
-      }
     }
 
     function update() {
@@ -456,31 +405,31 @@
         walls.forEach((wall) => {
           const wallPos = tmp3.copy(wall.position).add(room.position);
           const n = wall.userData.normal;
+          const nPlane = n.dot(wallPos);
           let between = false;
 
           for (let i = 0; i < targets.length && !between; i++) {
-            const rayDir = tmp.copy(targets[i]).sub(camPos);
-            const targetDist = rayDir.length();
-            if (targetDist < 1e-6) {
-              continue;
-            }
-            rayDir.normalize();
-
-            const denom = rayDir.dot(n);
+            const target = targets[i];
+            const lineDir = tmp.copy(target).sub(camPos);
+            const denom = lineDir.dot(n);
             if (Math.abs(denom) < 1e-6) {
               continue;
             }
 
-            const tHit = (n.dot(wallPos) - n.dot(camPos)) / denom;
-            if (tHit > 0 && tHit < targetDist) {
-              hit.copy(camPos).addScaledVector(rayDir, tHit);
-              const along = wall.userData.along;
-              const dAlong = Math.abs(hit[along] - wallPos[along]);
-              const dZ = Math.abs(hit.z - wallPos.z);
-              between =
-                dAlong < wall.userData.halfSpanAlong &&
-                dZ < wall.userData.halfSpanZ;
+            const camSide = n.dot(camPos) - nPlane;
+            const tgtSide = n.dot(target) - nPlane;
+            if (camSide * tgtSide >= 0) {
+              continue;
             }
+
+            const tLine = (nPlane - n.dot(camPos)) / denom;
+            hit.copy(camPos).addScaledVector(lineDir, tLine);
+            const along = wall.userData.along;
+            const dAlong = Math.abs(hit[along] - wallPos[along]);
+            const dZ = Math.abs(hit.z - wallPos.z);
+            between =
+              dAlong < wall.userData.halfSpanAlong &&
+              dZ < wall.userData.halfSpanZ;
           }
 
           wall.userData.hidden = between;
