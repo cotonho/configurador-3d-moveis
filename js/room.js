@@ -167,6 +167,8 @@
     floorTarget.z = room.position.z + 1;
     const tmp = new THREE.Vector3();
     const camPos = new THREE.Vector3();
+    const viewDirV = new THREE.Vector3();
+    const relV = new THREE.Vector3();
     const raycaster = new THREE.Raycaster();
     const furnitureBox = new THREE.Box3();
     let lastCenterUpdate = 0;
@@ -443,7 +445,15 @@
             hit.object.userData.hidden = true;
           });
         });
+        const viewDir = viewDirV.copy(targetVec).sub(camPos);
+        if (viewDir.lengthSq() > 1e-9) {
+          viewDir.normalize();
+        }
         walls.forEach((wall) => {
+          const rel = relV.copy(wall.position).add(room.position).sub(camPos);
+          if (rel.dot(viewDir) < -1) {
+            wall.userData.hidden = true;
+          }
           wall.visible = !wall.userData.hidden;
         });
       }
