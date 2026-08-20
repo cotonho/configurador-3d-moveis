@@ -402,6 +402,10 @@
 
       if (WALL_CULLING_ENABLED) {
         const targets = [center, floorTarget];
+        const insideMargin =
+          typeof wallCulling.insideMargin === "number"
+            ? wallCulling.insideMargin
+            : WALL_THICKNESS * 2;
         walls.forEach((wall) => {
           const wallPos = tmp3.copy(wall.position).add(room.position);
           const n = wall.userData.normal;
@@ -418,7 +422,10 @@
 
             const camSide = n.dot(camPos) - nPlane;
             const tgtSide = n.dot(target) - nPlane;
-            if (camSide * tgtSide >= 0) {
+            const opposite = camSide * tgtSide < 0;
+            const justInside =
+              camSide < 0 && camSide > -insideMargin;
+            if (!opposite && !justInside) {
               continue;
             }
 
