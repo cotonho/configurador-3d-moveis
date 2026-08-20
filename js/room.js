@@ -11,8 +11,6 @@
   const FURNITURE_SCALE = roomConfig.furnitureScale || 1;
   const CENTER = roomConfig.furnitureCenter || [0, 0.9, 0];
 
-  // const swapYZ = (v) => ({ x: v.x, y: v.z, z: v.y });
-
   function loadTHREE(callback) {
     if (window.THREE) {
       callback(window.THREE);
@@ -190,11 +188,12 @@
         feetZ0 = bbox.isEmpty() ? 0 : bbox.min.z;
       }
       wrap.scale.setScalar(FURNITURE_SCALE);
-      wrap.position.z = feetZ0 * (1 - FURNITURE_SCALE);
+      const floorZ = room.position.z;
+      wrap.position.z = floorZ - FURNITURE_SCALE * feetZ0;
       const offset = roomConfig.furnitureOffset;
       if (offset) {
         wrap.position.x = offset[0] || 0;
-        wrap.position.z = offset[1] || 0;
+        wrap.position.z += offset[1] || 0;
       }
       wrap.updateMatrixWorld(true);
     }
@@ -219,19 +218,6 @@
         box.min.z.toFixed(2) +
         " | gap: " +
         (box.min.z - room.position.z).toFixed(2);
-    }
-
-    function updateRoomLayout(box) {
-      if (!box) {
-        return;
-      }
-      const manualPos = roomConfig.position;
-      if (manualPos) {
-        room.position.set(manualPos[0], manualPos[1], manualPos[2]);
-        return;
-      }
-      const c = box.getCenter(new THREE.Vector3());
-      room.position.set(c.x, c.y, box.min.z);
     }
 
     function hideScenery(limit) {
@@ -264,7 +250,6 @@
       }
       hideScenery(furnitureDiagLimit());
       box.getCenter(center);
-      updateRoomLayout(box);
       updateDebug(box);
     }
 

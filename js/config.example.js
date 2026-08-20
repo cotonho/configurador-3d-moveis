@@ -24,7 +24,7 @@ room: {
     depthM: 2.8,
     heightM: 2.7,
     furnitureScale: 3,
-    position: null,
+    position: [0, 0, 0],
     hideScenery: true,
     transparentOpacity: 0.15,
     opaqueOpacity: 0.85,
