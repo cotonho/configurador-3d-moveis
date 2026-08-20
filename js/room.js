@@ -2,14 +2,78 @@
   const roomConfig = (window.SD_CONFIG && window.SD_CONFIG.room) || {};
   const THREE_URL = "https://unpkg.com/three@0.160.0/build/three.min.js";
 
-  const TRANSPARENT = roomConfig.transparentOpacity || 0.15;
-  const OPAQUE = roomConfig.opaqueOpacity || 0.85;
+  const wallCulling = roomConfig.wallCulling || {};
+  const WALL_CULLING_ENABLED = wallCulling.enabled !== false;
+  const HIDDEN_OPACITY =
+    wallCulling.hiddenOpacity !== undefined
+      ? wallCulling.hiddenOpacity
+      : roomConfig.transparentOpacity || 0;
+  const VISIBLE_OPACITY =
+    wallCulling.visibleOpacity !== undefined
+      ? wallCulling.visibleOpacity
+      : roomConfig.opaqueOpacity || 1;
+  const WALL_SMOOTHNESS =
+    wallCulling.smoothness !== undefined ? wallCulling.smoothness : 0.1;
   const UNITS_PER_M = roomConfig.unitsPerMeter || 100;
   const WIDTH = (roomConfig.widthM || 3.2) * UNITS_PER_M;
   const DEPTH = (roomConfig.depthM || 2.8) * UNITS_PER_M;
   const HEIGHT = (roomConfig.heightM || 2.7) * UNITS_PER_M;
+  const WALL_THICKNESS = (roomConfig.wallThicknessM || 0.15) * UNITS_PER_M;
+  const FLOOR_THICKNESS = (roomConfig.floorThicknessM || 0.1) * UNITS_PER_M;
   const FURNITURE_SCALE = roomConfig.furnitureScale || 1;
   const CENTER = roomConfig.furnitureCenter || [0, 0.9, 0];
+
+  function makeWoodTexture(THREE) {
+    const size = 256;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    const planks = 4;
+    const plank = size / planks;
+    for (let i = 0; i < planks; i++) {
+      for (let j = 0; j < planks; j++) {
+        const base = 170 + Math.round(Math.random() * 40);
+        const r = base;
+        const g = Math.round(base * 0.84);
+        const b = Math.round(base * 0.62);
+        const grad = ctx.createLinearGradient(0, j * plank, 0, (j + 1) * plank);
+        grad.addColorStop(0, "rgb(" + r + "," + g + "," + b + ")");
+        grad.addColorStop(
+          1,
+          "rgb(" +
+            Math.round(r * 0.9) +
+            "," +
+            Math.round(g * 0.9) +
+            "," +
+            Math.round(b * 0.9) +
+            ")"
+        );
+        ctx.fillStyle = grad;
+        ctx.fillRect(i * plank, j * plank, plank, plank);
+        ctx.strokeStyle = "rgba(60,40,20,0.55)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(i * plank, j * plank, plank, plank);
+        for (let k = 0; k < 5; k++) {
+          const y = j * plank + (k + 1) * (plank / 6);
+          ctx.strokeStyle = "rgba(120,90,50,0.25)";
+          ctx.beginPath();
+          ctx.moveTo(i * plank, y);
+          ctx.lineTo((i + 1) * plank, y);
+          ctx.stroke();
+        }
+      }
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(
+      Math.max(1, Math.round(WIDTH / 160)),
+      Math.max(1, Math.round(DEPTH / 160))
+    );
+    return texture;
+  }
 
   function loadTHREE(callback) {
     if (window.THREE) {
@@ -47,26 +111,33 @@
     }
 
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0xf0ede8,
-      transparent: true,
-      opacity: 0.95,
+      color: 0xffffff,
+      map: makeWoodTexture(THREE),
+      roughness: 0.85,
+      metalness: 0,
       side: THREE.DoubleSide
     });
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(WIDTH, DEPTH), floorMat);
+    const floor = new THREE.Mesh(
+      new THREE.BoxGeometry(WIDTH, DEPTH, FLOOR_THICKNESS),
+      floorMat
+    );
+    floor.position.z = -FLOOR_THICKNESS / 2;
     room.add(floor);
 
     const wallDefs = [
-      { pos: [0, -DEPTH / 2, HEIGHT / 2], size: [WIDTH, 0.2, HEIGHT], normal: [0, 1, 0], name: "back", halfX: WIDTH / 2, halfZ: HEIGHT / 2 },
-      { pos: [-WIDTH / 2, 0, HEIGHT / 2], size: [0.2, DEPTH, HEIGHT], normal: [1, 0, 0], name: "left", halfX: DEPTH / 2, halfZ: HEIGHT / 2 },
-      { pos: [WIDTH / 2, 0, HEIGHT / 2], size: [0.2, DEPTH, HEIGHT], normal: [-1, 0, 0], name: "right", halfX: DEPTH / 2, halfZ: HEIGHT / 2 }
+      { pos: [0, -DEPTH / 2 + WALL_THICKNESS / 2, HEIGHT / 2], size: [WIDTH, WALL_THICKNESS, HEIGHT], normal: [0, 1, 0], name: "back", halfX: WIDTH / 2, halfZ: HEIGHT / 2 },
+      { pos: [-WIDTH / 2 + WALL_THICKNESS / 2, 0, HEIGHT / 2], size: [WALL_THICKNESS, DEPTH, HEIGHT], normal: [1, 0, 0], name: "left", halfX: DEPTH / 2, halfZ: HEIGHT / 2 },
+      { pos: [WIDTH / 2 - WALL_THICKNESS / 2, 0, HEIGHT / 2], size: [WALL_THICKNESS, DEPTH, HEIGHT], normal: [-1, 0, 0], name: "right", halfX: DEPTH / 2, halfZ: HEIGHT / 2 }
     ];
 
     const walls = wallDefs.map((def) => {
       const mat = new THREE.MeshStandardMaterial({
-        color: 0xdfe5ec,
+        color: roomConfig.wallColor || 0xe4dfd6,
         transparent: true,
-        opacity: OPAQUE,
-        side: THREE.DoubleSide
+        opacity: VISIBLE_OPACITY,
+        side: THREE.DoubleSide,
+        roughness: 0.9,
+        metalness: 0
       });
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(def.size[0], def.size[1], def.size[2]),
@@ -96,10 +167,13 @@
     }
 
     const center = new THREE.Vector3(CENTER[0], CENTER[1], CENTER[2]);
-    const dir = new THREE.Vector3();
+    const floorTarget = new THREE.Vector3();
+    floorTarget.copy(center);
+    floorTarget.z = room.position.z + 1;
     const tmp = new THREE.Vector3();
-    const tmp2 = new THREE.Vector3();
     const tmp3 = new THREE.Vector3();
+    const camPos = new THREE.Vector3();
+    const hit = new THREE.Vector3();
     const furnitureBox = new THREE.Box3();
     let lastCenterUpdate = 0;
 
@@ -211,13 +285,19 @@
           "position:absolute;left:16px;bottom:64px;z-index:20;font:11px monospace;color:#1d2733;background:rgba(255,255,255,0.85);padding:6px 10px;border-radius:8px;border:1px solid #dfe5ec;";
         document.body.appendChild(debugEl);
       }
+      const hidden = walls
+        .filter((w) => w.userData.hidden)
+        .map((w) => w.userData.name)
+        .join(", ") || "nenhuma";
       debugEl.textContent =
         "chao(z): " +
         room.position.z.toFixed(2) +
         " | fundo movel(z): " +
         box.min.z.toFixed(2) +
         " | gap: " +
-        (box.min.z - room.position.z).toFixed(2);
+        (box.min.z - room.position.z).toFixed(2) +
+        " | ocultas: " +
+        hidden;
     }
 
     function hideScenery(limit) {
@@ -250,6 +330,8 @@
       }
       hideScenery(furnitureDiagLimit());
       box.getCenter(center);
+      floorTarget.copy(center);
+      floorTarget.z = room.position.z + 1;
       updateDebug(box);
     }
 
@@ -264,63 +346,51 @@
       );
     }
 
-    function cameraDirection() {
-      if (camera.position && camera.target) {
-        const p = vec3Of(camera.position, tmp2);
-        const t = vec3Of(camera.target, tmp);
-        dir.copy(t).sub(p);
-        if (dir.lengthSq() > 0) {
-          dir.normalize();
-        }
-        return;
-      }
-      if (typeof camera.getWorldDirection === "function") {
-        camera.getWorldDirection(dir);
-        return;
-      }
-      const m = camera.matrixWorld && camera.matrixWorld.elements;
-      if (m) {
-        dir.set(-m[8], -m[9], -m[10]).normalize();
-        return;
-      }
-      if (camera.quaternion) {
-        dir.set(0, 0, -1).applyQuaternion(camera.quaternion);
-        return;
-      }
-      dir.set(0, 0, -1);
-    }
-
     function update() {
       updateFurnitureCenter(performance.now());
-      cameraDirection();
-      const camPos = vec3Of(
+      vec3Of(
         camera.position ||
         camera.worldPosition ||
         (camera.matrixWorld
           ? new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld)
           : new THREE.Vector3()),
-        tmp2
+        camPos
       );
-      const camT = tmp.copy(camPos).sub(center).dot(dir);
 
-      if (isFinite(camT)) {
+      if (WALL_CULLING_ENABLED) {
+        const targets = [center, floorTarget];
         walls.forEach((wall) => {
           const wallPos = tmp3.copy(wall.position).add(room.position);
           const n = wall.userData.normal;
-          const denom = dir.dot(n);
           let between = false;
-          if (Math.abs(denom) > 1e-6) {
+
+          for (let i = 0; i < targets.length && !between; i++) {
+            const rayDir = tmp.copy(targets[i]).sub(camPos);
+            const targetDist = rayDir.length();
+            if (targetDist < 1e-6) {
+              continue;
+            }
+            rayDir.normalize();
+
+            const denom = rayDir.dot(n);
+            if (Math.abs(denom) < 1e-6) {
+              continue;
+            }
+
             const tHit = (n.dot(wallPos) - n.dot(camPos)) / denom;
-            if (tHit > 0 && tHit < Math.abs(camT)) {
-              const hit = tmp2.copy(camPos).addScaledVector(dir, tHit);
+            if (tHit > 0 && tHit < targetDist) {
+              hit.copy(camPos).addScaledVector(rayDir, tHit);
               const dX = Math.abs(hit.x - wallPos.x);
               const dZ = Math.abs(hit.z - wallPos.z);
               between =
                 dX < wall.userData.halfSpanX && dZ < wall.userData.halfSpanZ;
             }
           }
-          const target = between ? TRANSPARENT : OPAQUE;
-          wall.material.opacity += (target - wall.material.opacity) * 0.1;
+
+          wall.userData.hidden = between;
+          const target = between ? HIDDEN_OPACITY : VISIBLE_OPACITY;
+          wall.material.opacity +=
+            (target - wall.material.opacity) * WALL_SMOOTHNESS;
         });
       }
 

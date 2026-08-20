@@ -23,11 +23,13 @@ room: {
     widthM: 3.2,
     depthM: 2.8,
     heightM: 2.7,
+    wallThicknessM: 0.15,
+    floorThicknessM: 0.1,
     furnitureScale: 3,
     position: [0, 0, 0],
     hideScenery: true,
-    transparentOpacity: 0.15,
-    opaqueOpacity: 0.85,
+    transparentOpacity: 0,
+    opaqueOpacity: 1,
     debug: true,
     furnitureCenter: null
   }
