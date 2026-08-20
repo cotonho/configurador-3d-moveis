@@ -4,16 +4,6 @@
 
   const wallCulling = roomConfig.wallCulling || {};
   const WALL_CULLING_ENABLED = wallCulling.enabled !== false;
-  const HIDDEN_OPACITY =
-    wallCulling.hiddenOpacity !== undefined
-      ? wallCulling.hiddenOpacity
-      : roomConfig.transparentOpacity || 0;
-  const VISIBLE_OPACITY =
-    wallCulling.visibleOpacity !== undefined
-      ? wallCulling.visibleOpacity
-      : roomConfig.opaqueOpacity || 1;
-  const WALL_SMOOTHNESS =
-    wallCulling.smoothness !== undefined ? wallCulling.smoothness : 0.1;
   const UNITS_PER_M = roomConfig.unitsPerMeter || 100;
   const WIDTH = (roomConfig.widthM || 3.2) * UNITS_PER_M;
   const DEPTH = (roomConfig.depthM || 2.8) * UNITS_PER_M;
@@ -139,12 +129,9 @@
     const walls = wallDefs.map((def) => {
       const mat = new THREE.MeshStandardMaterial({
         color: roomConfig.wallColor || 0xe4dfd6,
-        transparent: true,
-        opacity: VISIBLE_OPACITY,
         side: THREE.DoubleSide,
         roughness: 0.9,
-        metalness: 0,
-        depthWrite: false
+        metalness: 0
       });
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(def.size[0], def.size[1], def.size[2]),
@@ -406,12 +393,7 @@
           }
 
           wall.userData.hidden = between;
-          if (between) {
-            wall.material.opacity = HIDDEN_OPACITY;
-          } else {
-            wall.material.opacity +=
-              (VISIBLE_OPACITY - wall.material.opacity) * WALL_SMOOTHNESS;
-          }
+          wall.visible = !between;
         });
       }
 
