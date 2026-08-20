@@ -171,6 +171,8 @@
     const hit = new THREE.Vector3();
     const furnitureBox = new THREE.Box3();
     let lastCenterUpdate = 0;
+    const targetVec = new THREE.Vector3();
+    let probeSlider = null;
 
     function collectMeshes(obj, out) {
       obj.children.forEach((child) => {
@@ -269,6 +271,35 @@
 
     let debugEl = null;
 
+    function createProbe() {
+      if (probeSlider || roomConfig.debug !== true) {
+        return;
+      }
+      const el = document.createElement("div");
+      el.style.cssText =
+        "position:absolute;left:16px;bottom:20px;z-index:20;font:11px monospace;color:#1d2733;background:rgba(255,255,255,0.85);padding:4px 10px;border-radius:8px;border:1px solid #dfe5ec;display:flex;align-items:center;gap:8px;";
+      const label = document.createElement("span");
+      label.textContent = "dist alvo:";
+      probeSlider = document.createElement("input");
+      probeSlider.type = "range";
+      probeSlider.min = "0";
+      probeSlider.max = "2000";
+      probeSlider.step = "0.5";
+      probeSlider.value = "1000";
+      probeSlider.style.width = "240px";
+      probeSlider.addEventListener("input", () => {
+        const d = Number(probeSlider.value);
+        const toTarget = tmp3.copy(targetVec).sub(camPos);
+        if (toTarget.lengthSq() > 1e-9) {
+          toTarget.normalize();
+        }
+        camPos.copy(targetVec).addScaledVector(toTarget, -d);
+        camera.position = [camPos.x, camPos.y, camPos.z];
+      });
+      el.append(label, probeSlider);
+      document.body.appendChild(el);
+    }
+
     function updateDebug(box, limit) {
       if (roomConfig.debug !== true) {
         return;
@@ -280,6 +311,7 @@
           "position:absolute;left:16px;bottom:64px;z-index:20;font:11px monospace;color:#1d2733;background:rgba(255,255,255,0.85);padding:6px 10px;border-radius:8px;border:1px solid #dfe5ec;white-space:pre;";
         document.body.appendChild(debugEl);
       }
+      createProbe();
       const wallsState = walls
         .map((w) => w.userData.name + ":" + (w.userData.hidden ? "S" : "N"))
         .join(" ");
@@ -290,7 +322,9 @@
         camPos.y.toFixed(0) +
         "," +
         camPos.z.toFixed(0) +
-        ") | chao(z): " +
+        ") | dist: " +
+        camPos.distanceTo(targetVec).toFixed(0) +
+        " | chao(z): " +
         room.position.z.toFixed(0) +
         " | pes(z): " +
         box.min.z.toFixed(0) +
@@ -359,6 +393,12 @@
           : new THREE.Vector3()),
         camPos
       );
+      if (camera.target !== undefined) {
+        vec3Of(camera.target, targetVec);
+      }
+      if (probeSlider && probeSlider !== document.activeElement) {
+        probeSlider.value = String(camPos.distanceTo(targetVec));
+      }
 
       if (WALL_CULLING_ENABLED) {
         const targets = [center, floorTarget];
