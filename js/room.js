@@ -122,6 +122,7 @@
 
     const wallDefs = [
       { pos: [0, -DEPTH / 2 + WALL_THICKNESS / 2, HEIGHT / 2], size: [WIDTH, WALL_THICKNESS, HEIGHT], normal: [0, 1, 0], name: "back", along: "x", halfAlong: WIDTH / 2, halfZ: HEIGHT / 2 },
+      { pos: [0, DEPTH / 2 - WALL_THICKNESS / 2, HEIGHT / 2], size: [WIDTH, WALL_THICKNESS, HEIGHT], normal: [0, -1, 0], name: "front", along: "x", halfAlong: WIDTH / 2, halfZ: HEIGHT / 2 },
       { pos: [-WIDTH / 2 + WALL_THICKNESS / 2, 0, HEIGHT / 2], size: [WALL_THICKNESS, DEPTH, HEIGHT], normal: [1, 0, 0], name: "left", along: "y", halfAlong: DEPTH / 2, halfZ: HEIGHT / 2 },
       { pos: [WIDTH / 2 - WALL_THICKNESS / 2, 0, HEIGHT / 2], size: [WALL_THICKNESS, DEPTH, HEIGHT], normal: [-1, 0, 0], name: "right", along: "y", halfAlong: DEPTH / 2, halfZ: HEIGHT / 2 }
     ];
@@ -431,6 +432,8 @@
           let hidden = false;
           if (wall.userData.name === "back") {
             hidden = camPos.y < cy;
+          } else if (wall.userData.name === "front") {
+            hidden = camPos.y > cy;
           } else if (wall.userData.name === "left") {
             hidden = camPos.x < cx - sideMargin;
           } else if (wall.userData.name === "right") {
