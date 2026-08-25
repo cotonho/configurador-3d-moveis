@@ -28,11 +28,12 @@ room: {
     furnitureScale: 3,
     position: [0, 0, 0],
     hideScenery: true,
-    wallCulling: {
+wallCulling: {
       enabled: true,
       hiddenOpacity: 0,
       visibleOpacity: 1,
-      smoothness: 0.1
+      smoothness: 0.1,
+      sideMargin: 0
     },
     debug: true,
     furnitureCenter: null

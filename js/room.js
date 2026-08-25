@@ -169,7 +169,6 @@
     const camPos = new THREE.Vector3();
     const viewDirV = new THREE.Vector3();
     const relV = new THREE.Vector3();
-    const raycaster = new THREE.Raycaster();
     const furnitureBox = new THREE.Box3();
     let lastCenterUpdate = 0;
     const targetVec = new THREE.Vector3();
@@ -424,37 +423,21 @@
       }
 
       if (WALL_CULLING_ENABLED) {
-        const targets = [center, floorTarget];
+        const cx = room.position.x;
+        const cy = room.position.y;
+        const sideMargin =
+          typeof wallCulling.sideMargin === "number" ? wallCulling.sideMargin : 0;
         walls.forEach((wall) => {
-          wall.userData.hidden = false;
-        });
-        targets.forEach((target) => {
-          const rayDir = tmp.copy(target).sub(camPos);
-          const targetDist = rayDir.length();
-          if (targetDist < 1e-6) {
-            return;
+          let hidden = false;
+          if (wall.userData.name === "back") {
+            hidden = camPos.y < cy;
+          } else if (wall.userData.name === "left") {
+            hidden = camPos.x < cx - sideMargin;
+          } else if (wall.userData.name === "right") {
+            hidden = camPos.x > cx + sideMargin;
           }
-          rayDir.normalize();
-
-          raycaster.set(camPos, rayDir);
-          raycaster.near = 1;
-          raycaster.far = Math.max(1, targetDist - 1);
-
-          const hits = raycaster.intersectObjects(walls, false);
-          hits.forEach((hit) => {
-            hit.object.userData.hidden = true;
-          });
-        });
-        const viewDir = viewDirV.copy(targetVec).sub(camPos);
-        if (viewDir.lengthSq() > 1e-9) {
-          viewDir.normalize();
-        }
-        walls.forEach((wall) => {
-          const rel = relV.copy(wall.position).add(room.position).sub(camPos);
-          if (rel.dot(viewDir) < -1) {
-            wall.userData.hidden = true;
-          }
-          wall.visible = !wall.userData.hidden;
+          wall.userData.hidden = hidden;
+          wall.visible = !hidden;
         });
       }
 
