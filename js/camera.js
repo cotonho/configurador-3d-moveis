@@ -58,63 +58,72 @@
     let lastX = 0;
     let lastY = 0;
 
-    document.addEventListener("pointerdown", function (e) {
-      if (e.button !== 2) return;
-      e.stopImmediatePropagation();
-      e.preventDefault();
-      isPanning = true;
-      lastX = e.clientX;
-      lastY = e.clientY;
-    }, { capture: true });
+    const canvas = viewport.domElement || document.getElementById("canvas");
 
-    document.addEventListener("pointermove", function (e) {
-      if (!isPanning) return;
-      e.stopImmediatePropagation();
-      e.preventDefault();
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      if (dx === 0 && dy === 0) return;
+    if (canvas) {
+      canvas.addEventListener("pointerdown", function (e) {
+        if (e.button !== 2) return;
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        isPanning = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+      }, { capture: true });
 
-      const pos = camera.position;
-      const tgt = camera.target;
-      if (!pos || !tgt) return;
+      canvas.addEventListener("pointermove", function (e) {
+        if (!isPanning) return;
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        if (dx === 0 && dy === 0) return;
 
-      const dirX = tgt[0] - pos[0];
-      const dirY = tgt[1] - pos[1];
-      const dirZ = tgt[2] - pos[2];
-      const len = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
-      if (len === 0) return;
+        const pos = camera.position;
+        const tgt = camera.target;
+        if (!pos || !tgt) return;
 
-      const fX = dirX / len, fY = dirY / len, fZ = dirZ / len;
-      const rX = -fY, rY = fX, rZ = 0;
-      const rLen = Math.sqrt(rX * rX + rY * rY + rZ * rZ);
-      const rightX = rLen > 0 ? rX / rLen : 0;
-      const rightY = rLen > 0 ? rY / rLen : 0;
-      const rightZ = 0;
-      const upX = fY * rightZ - fZ * rightY;
-      const upY = fZ * rightX - fX * rightZ;
-      const upZ = fX * rightY - fY * rightX;
+        const dirX = tgt[0] - pos[0];
+        const dirY = tgt[1] - pos[1];
+        const dirZ = tgt[2] - pos[2];
+        const len = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+        if (len === 0) return;
 
-      const sensitivity = 0.5;
-      const offX = (-dx * rightX + dy * upX) * sensitivity;
-      const offY = (-dx * rightY + dy * upY) * sensitivity;
-      const offZ = (-dx * rightZ + dy * upZ) * sensitivity;
+        const fX = dirX / len, fY = dirY / len, fZ = dirZ / len;
+        const rX = -fY, rY = fX, rZ = 0;
+        const rLen = Math.sqrt(rX * rX + rY * rY + rZ * rZ);
+        const rightX = rLen > 0 ? rX / rLen : 0;
+        const rightY = rLen > 0 ? rY / rLen : 0;
+        const rightZ = 0;
+        const upX = fY * rightZ - fZ * rightY;
+        const upY = fZ * rightX - fX * rightZ;
+        const upZ = fX * rightY - fY * rightX;
 
-      camera.position = [pos[0] + offX, pos[1] + offY, pos[2] + offZ];
-      camera.target = [tgt[0] + offX, tgt[1] + offY, tgt[2] + offZ];
-    }, { capture: true });
+        const sensitivity = 0.5;
+        const offX = (-dx * rightX + dy * upX) * sensitivity;
+        const offY = (-dx * rightY + dy * upY) * sensitivity;
+        const offZ = (-dx * rightZ + dy * upZ) * sensitivity;
 
-    document.addEventListener("pointerup", function (e) {
-      if (e.button !== 2) return;
-      e.stopImmediatePropagation();
-      isPanning = false;
-    }, { capture: true });
+        camera.position = [pos[0] + offX, pos[1] + offY, pos[2] + offZ];
+        camera.target = [tgt[0] + offX, tgt[1] + offY, tgt[2] + offZ];
+      }, { capture: true });
 
-    document.addEventListener("contextmenu", function (e) {
-      e.preventDefault();
-    }, { capture: true });
+      canvas.addEventListener("pointerup", function (e) {
+        if (e.button !== 2) return;
+        e.stopImmediatePropagation();
+        isPanning = false;
+      }, { capture: true });
+
+      canvas.addEventListener("wheel", function (e) {
+        if (isPanning) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, { capture: true });
+    }
+
+    canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); }, { capture: true });
 
     console.log("camera.js: right-click pan via document com stopImmediatePropagation");
   }
