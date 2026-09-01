@@ -1,22 +1,6 @@
 (function () {
   const cameraConfig = (window.SD_CONFIG && window.SD_CONFIG.camera) || {};
 
-  function findControls(viewport) {
-    const camera = viewport.camera;
-    const candidates = [
-      camera._camera,
-      camera._controls,
-      camera.controls,
-      viewport._controls,
-      viewport.controls
-    ];
-    for (const c of candidates) {
-      if (c && c._input) return c;
-      if (c && c.controls && c.controls._input) return c.controls;
-    }
-    return null;
-  }
-
   function initCamera(viewport) {
     if (!viewport || !viewport.camera) {
       console.warn("camera.js: viewport.camera indisponivel");
@@ -50,23 +34,55 @@
       camera.enableRotation = true;
     }
 
-    const controls = findControls(viewport);
-    if (controls) {
-      console.log("camera.js: controls interno encontrado", controls);
-      console.log("camera.js: input atual", JSON.stringify(controls._input));
-      controls._input.mouse = { rotate: 0, zoom: 1, pan: 2 };
-      console.log("camera.js: input atualizado", JSON.stringify(controls._input));
-    } else {
-      console.warn("camera.js: controls interno NAO encontrado");
-      console.log("camera.js: tentativas de acesso:");
-      console.log("  camera._camera:", camera._camera);
-      console.log("  camera._controls:", camera._controls);
-      console.log("  camera.controls:", camera.controls);
-      console.log("  viewport._controls:", viewport._controls);
-      console.log("  viewport.controls:", viewport.controls);
+    const canvas = viewport.domElement || document.getElementById("canvas");
+    if (canvas) {
+      setupRightClickPan(viewport, canvas);
     }
 
     console.log("camera.js: restricoes aplicadas com sucesso");
+  }
+
+  function setupRightClickPan(viewport, canvas) {
+    const camera = viewport.camera;
+    let isPanning = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    function onPointerDown(e) {
+      if (e.button !== 2) return;
+      e.preventDefault();
+      e.stopPropagation();
+      isPanning = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      canvas.setPointerCapture(e.pointerId);
+    }
+
+    function onPointerMove(e) {
+      if (!isPanning) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+
+      if (camera.pan) {
+        camera.pan(-dx * 0.005, dy * 0.005);
+      }
+    }
+
+    function onPointerUp(e) {
+      if (e.button !== 2) return;
+      isPanning = false;
+      canvas.releasePointerCapture(e.pointerId);
+    }
+
+    canvas.addEventListener("pointerdown", onPointerDown, { capture: true });
+    canvas.addEventListener("pointermove", onPointerMove, { capture: true });
+    canvas.addEventListener("pointerup", onPointerUp, { capture: true });
+    canvas.addEventListener("pointerleave", onPointerUp, { capture: true });
+    canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); }, { capture: true });
+
+    console.log("camera.js: right-click pan configurado no canvas");
   }
 
   window.addEventListener("sdv-ready", function (e) {
