@@ -39,18 +39,11 @@ wallCulling: {
     furnitureCenter: null
   },
   camera: {
-    rightButton: "pan",
-    restrictions: {
-      enabled: true,
-      zoomMin: 100,
-      zoomMax: 5000,
-      sphereRadius: 2000,
-      yawMin: -180,
-      yawMax: 180,
-      pitchMin: -80,
-      pitchMax: 80,
-      targetRestriction: null
-    },
-    damping: 0.1
+    polarMin: 45,
+    polarMax: 60,
+    zoomMin: 300,
+    zoomMax: 900,
+    enablePan: true,
+    enableRotation: true
   }
 };

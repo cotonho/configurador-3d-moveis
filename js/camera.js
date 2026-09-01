@@ -3,98 +3,54 @@
 
   function initCamera(viewport) {
     if (!viewport || !viewport.camera) {
-      console.warn("camera.js: viewport.camera não disponível");
+      console.warn("camera.js: viewport.camera indisponivel");
       return;
     }
     const camera = viewport.camera;
-    const restrictions = cameraConfig.restrictions || {};
-    const enabled = restrictions.enabled !== false;
+    const cfg = {
+      polarMin: (cameraConfig.polarMin ?? 45) * Math.PI / 180,
+      polarMax: (cameraConfig.polarMax ?? 60) * Math.PI / 180,
+      zoomMin: cameraConfig.zoomMin ?? 300,
+      zoomMax: cameraConfig.zoomMax ?? 900,
+      enablePan: cameraConfig.enablePan !== false,
+      enableRotation: cameraConfig.enableRotation !== false
+    };
 
-    if (enabled) {
-      if (restrictions.zoomMin !== undefined || restrictions.zoomMax !== undefined) {
-        camera.zoomRestriction = {
-          minDistance: restrictions.zoomMin ?? 0,
-          maxDistance: restrictions.zoomMax ?? Infinity
-        };
-      }
+    camera.rotationRestriction = {
+      horizontal: { min: -Infinity, max: Infinity },
+      vertical: { min: cfg.polarMin, max: cfg.polarMax }
+    };
 
-      if (restrictions.sphereRadius !== undefined && restrictions.sphereRadius > 0) {
-        camera.spherePositionRestriction = {
-          center: [0, 0, 0],
-          radius: restrictions.sphereRadius
-        };
-      }
+    camera.zoomRestriction = {
+      minDistance: cfg.zoomMin,
+      maxDistance: cfg.zoomMax
+    };
 
-      if (restrictions.yawMin !== undefined || restrictions.yawMax !== undefined ||
-          restrictions.pitchMin !== undefined || restrictions.pitchMax !== undefined) {
-        camera.rotationRestriction = {
-          horizontal: {
-            min: restrictions.yawMin ?? -Infinity,
-            max: restrictions.yawMax ?? Infinity
-          },
-          vertical: {
-            min: (restrictions.pitchMin ?? -80) * Math.PI / 180,
-            max: (restrictions.pitchMax ?? 80) * Math.PI / 180
-          }
-        };
-      }
-
-      if (restrictions.targetRestriction) {
-        camera.targetRestriction = restrictions.targetRestriction;
-      }
+    if (camera.enablePan !== undefined) {
+      camera.enablePan = cfg.enablePan;
+    }
+    if (camera.enableRotation !== undefined) {
+      camera.enableRotation = cfg.enableRotation;
     }
 
-    const rightButton = cameraConfig.rightButton || "turntable";
-    if (rightButton === "pan") {
-      setupRightClickPan(viewport);
+    if (camera.spherePositionRestriction !== undefined) {
+      camera.spherePositionRestriction = { radius: 0 };
     }
   }
 
-  function setupRightClickPan(viewport) {
-    const canvas = viewport.domElement || viewport.canvas;
-    if (!canvas) {
-      console.warn("camera.js: canvas não encontrado para right-click pan");
+  function focusOn(target, position) {
+    const viewport = window.shapediverAPI?.getViewport?.();
+    const camera = viewport?.camera;
+    if (!camera) {
       return;
     }
-
-    let isPanning = false;
-    let lastClientX = 0;
-    let lastClientY = 0;
-
-    const camera = viewport.camera;
-
-    function onPointerDown(event) {
-      if (event.button !== 2) return;
-      event.preventDefault();
-      isPanning = true;
-      lastClientX = event.clientX;
-      lastClientY = event.clientY;
-      canvas.setPointerCapture(event.pointerId);
+    const anim = [{ position: position, target: target }];
+    if (camera.animate) {
+      camera.animate(anim, { duration: 600 });
+    } else {
+      camera.position = position;
+      camera.target = target;
     }
-
-    function onPointerMove(event) {
-      if (!isPanning) return;
-      const dx = event.clientX - lastClientX;
-      const dy = event.clientY - lastClientY;
-      lastClientX = event.clientX;
-      lastClientY = event.clientY;
-
-      if (camera.pan) {
-        camera.pan(-dx * 0.005, dy * 0.005);
-      }
-    }
-
-    function onPointerUp(event) {
-      if (event.button !== 2) return;
-      isPanning = false;
-      canvas.releasePointerCapture(event.pointerId);
-    }
-
-    canvas.addEventListener("pointerdown", onPointerDown);
-    canvas.addEventListener("pointermove", onPointerMove);
-    canvas.addEventListener("pointerup", onPointerUp);
-    canvas.addEventListener("pointerleave", onPointerUp);
-    canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 
   window.addEventListener("sdv-ready", () => {
@@ -103,4 +59,6 @@
       initCamera(viewport);
     }
   });
+
+  window.configuradorCamera = { focusOn };
 })();
