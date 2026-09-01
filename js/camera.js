@@ -73,10 +73,11 @@
     let lastX = 0;
     let lastY = 0;
 
-    canvas.addEventListener("pointerdown", function (e) {
+    document.addEventListener("pointerdown", function (e) {
       if (e.button !== 2) return;
+      if (e.target !== canvas) return;
+      e.stopImmediatePropagation();
       e.preventDefault();
-      e.stopPropagation();
       isPanning = true;
       lastX = e.clientX;
       lastY = e.clientY;
@@ -114,9 +115,9 @@
       const nuz = uLen > 0 ? uz / uLen : 0;
 
       const sensitivity = 0.5;
-      const offX = (dx * nrx + dy * nux) * sensitivity;
-      const offY = (dx * nry + dy * nuy) * sensitivity;
-      const offZ = (dy * nuz) * sensitivity;
+      const offX = (dx * nrx - dy * nux) * sensitivity;
+      const offY = (dx * nry - dy * nuy) * sensitivity;
+      const offZ = (-dy * nuz) * sensitivity;
 
       scene.children.forEach(function (child) {
         child.position.x += offX;
@@ -127,13 +128,10 @@
 
     canvas.addEventListener("pointerup", function (e) {
       if (e.button !== 2) return;
+      e.stopImmediatePropagation();
       isPanning = false;
       canvas.releasePointerCapture(e.pointerId);
     }, { capture: true });
-
-    canvas.addEventListener("pointerleave", function () {
-      isPanning = false;
-    });
 
     canvas.addEventListener("contextmenu", function (e) {
       e.preventDefault();
