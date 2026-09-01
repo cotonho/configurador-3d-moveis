@@ -39,9 +39,9 @@ wallCulling: {
     furnitureCenter: null
   },
   camera: {
-    polarMin: 45,
-    polarMax: 60,
-    zoomMin: 300,
+    polarMin: 10,
+    polarMax: 89,
+    zoomMin: 100,
     zoomMax: 900,
     enablePan: true,
     enableRotation: true
