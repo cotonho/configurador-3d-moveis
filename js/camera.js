@@ -25,7 +25,7 @@
     };
 
     if (typeof camera.enablePan !== "undefined") {
-      camera.enablePan = true;
+      camera.enablePan = false;
     }
     if (typeof camera.enableTurntableControls !== "undefined") {
       camera.enableTurntableControls = false;
@@ -64,10 +64,43 @@
       const dy = e.clientY - lastY;
       lastX = e.clientX;
       lastY = e.clientY;
+      if (dx === 0 && dy === 0) return;
 
-      if (camera.pan) {
-        camera.pan(-dx * 0.005, dy * 0.005);
-      }
+      const pos = camera.position;
+      const tgt = camera.target;
+      if (!pos || !tgt) return;
+
+      const dirX = tgt[0] - pos[0];
+      const dirY = tgt[1] - pos[1];
+      const dirZ = tgt[2] - pos[2];
+      const len = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+      if (len === 0) return;
+
+      const forwardX = dirX / len;
+      const forwardY = dirY / len;
+      const forwardZ = dirZ / len;
+
+      const upX = 0, upY = 0, upZ = 1;
+
+      const rightX = upY * forwardZ - upZ * forwardY;
+      const rightY = upZ * forwardX - upX * forwardZ;
+      const rightZ = upX * forwardY - upY * forwardX;
+      const rightLen = Math.sqrt(rightX * rightX + rightY * rightY + rightZ * rightZ);
+      const rX = rightLen > 0 ? rightX / rightLen : 0;
+      const rY = rightLen > 0 ? rightY / rightLen : 0;
+      const rZ = rightLen > 0 ? rightZ / rightLen : 0;
+
+      const camUpX = forwardY * rZ - forwardZ * rY;
+      const camUpY = forwardZ * rX - forwardX * rZ;
+      const camUpZ = forwardX * rY - forwardY * rX;
+
+      const sensitivity = 0.5;
+      const offsetX = (-dx * rX + dy * camUpX) * sensitivity;
+      const offsetY = (-dx * rY + dy * camUpY) * sensitivity;
+      const offsetZ = (-dx * rZ + dy * camUpZ) * sensitivity;
+
+      camera.position = [pos[0] + offsetX, pos[1] + offsetY, pos[2] + offsetZ];
+      camera.target = [tgt[0] + offsetX, tgt[1] + offsetY, tgt[2] + offsetZ];
     }
 
     function onPointerUp(e) {
@@ -82,7 +115,7 @@
     canvas.addEventListener("pointerleave", onPointerUp, { capture: true });
     canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); }, { capture: true });
 
-    console.log("camera.js: right-click pan configurado no canvas");
+    console.log("camera.js: right-click pan configurado via position/target");
   }
 
   window.addEventListener("sdv-ready", function (e) {
