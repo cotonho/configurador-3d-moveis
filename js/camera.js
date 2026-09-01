@@ -1,7 +1,12 @@
 (function () {
   const cameraConfig = (window.SD_CONFIG && window.SD_CONFIG.camera) || {};
 
-  function applyCameraSettings(camera) {
+  function initCamera(viewport) {
+    if (!viewport || !viewport.camera) {
+      console.warn("camera.js: viewport.camera indisponivel");
+      return;
+    }
+    const camera = viewport.camera;
     const polarMin = cameraConfig.polarMin ?? 45;
     const polarMax = cameraConfig.polarMax ?? 60;
     const zoomMin = cameraConfig.zoomMin ?? 300;
@@ -19,62 +24,65 @@
       maxDistance: zoomMax
     };
 
-    camera.enablePan = true;
-    camera.enableRotation = true;
-    camera.enableTurntableControls = false;
-  }
-
-  function initCamera(viewport) {
-    if (!viewport || !viewport.camera) {
-      console.warn("camera.js: viewport.camera indisponivel");
-      return;
+    if (typeof camera.enablePan !== "undefined") {
+      camera.enablePan = true;
     }
-    const camera = viewport.camera;
-    applyCameraSettings(camera);
+    if (typeof camera.enableTurntableControls !== "undefined") {
+      camera.enableTurntableControls = false;
+    }
+    if (typeof camera.enableRotation !== "undefined") {
+      camera.enableRotation = true;
+    }
 
     const canvas = viewport.domElement || document.getElementById("canvas");
     if (canvas) {
-      blockRightClick(canvas);
+      setupRightClickPan(viewport, canvas);
     }
 
-    const session = window.shapediverAPI && window.shapediverAPI.getSession && window.shapediverAPI.getSession();
-    if (session && session.updateCallback) {
-      const origCallback = session.updateCallback;
-      session.updateCallback = function () {
-        if (origCallback) origCallback();
-        applyCameraSettings(camera);
-      };
-    }
-
-    let attempts = 0;
-    const interval = setInterval(function () {
-      applyCameraSettings(camera);
-      attempts++;
-      if (attempts >= 10) clearInterval(interval);
-    }, 500);
-
-    console.log("camera.js: tudo configurado");
+    console.log("camera.js: restricoes aplicadas com sucesso");
   }
 
-  function blockRightClick(canvas) {
-    function block(e) {
+  function setupRightClickPan(viewport, canvas) {
+    const camera = viewport.camera;
+    let isPanning = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    function onPointerDown(e) {
       if (e.button !== 2) return;
-      e.stopImmediatePropagation();
       e.preventDefault();
-    }
-    function blockAll(e) {
-      e.stopImmediatePropagation();
-      e.preventDefault();
+      e.stopPropagation();
+      isPanning = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      canvas.setPointerCapture(e.pointerId);
     }
 
-    canvas.addEventListener("pointerdown", block, { capture: true });
-    canvas.addEventListener("pointermove", blockAll, { capture: true });
-    canvas.addEventListener("pointerup", block, { capture: true });
-    canvas.addEventListener("pointerleave", block, { capture: true });
-    canvas.addEventListener("wheel", blockAll, { capture: true });
-    canvas.addEventListener("contextmenu", blockAll, { capture: true });
+    function onPointerMove(e) {
+      if (!isPanning) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
 
-    console.log("camera.js: botao direito bloqueado no canvas");
+      if (camera.pan) {
+        camera.pan(-dx * 0.005, dy * 0.005);
+      }
+    }
+
+    function onPointerUp(e) {
+      if (e.button !== 2) return;
+      isPanning = false;
+      canvas.releasePointerCapture(e.pointerId);
+    }
+
+    canvas.addEventListener("pointerdown", onPointerDown, { capture: true });
+    canvas.addEventListener("pointermove", onPointerMove, { capture: true });
+    canvas.addEventListener("pointerup", onPointerUp, { capture: true });
+    canvas.addEventListener("pointerleave", onPointerUp, { capture: true });
+    canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); }, { capture: true });
+
+    console.log("camera.js: right-click pan configurado no canvas");
   }
 
   window.addEventListener("sdv-ready", function (e) {
