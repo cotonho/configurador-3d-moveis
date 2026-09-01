@@ -7,58 +7,39 @@
       return;
     }
     const camera = viewport.camera;
-    const cfg = {
-      polarMin: (cameraConfig.polarMin ?? 45) * Math.PI / 180,
-      polarMax: (cameraConfig.polarMax ?? 60) * Math.PI / 180,
-      zoomMin: cameraConfig.zoomMin ?? 300,
-      zoomMax: cameraConfig.zoomMax ?? 900,
-      enablePan: cameraConfig.enablePan !== false,
-      enableRotation: cameraConfig.enableRotation !== false
-    };
+    const polarMin = (cameraConfig.polarMin ?? 45) * Math.PI / 180;
+    const polarMax = (cameraConfig.polarMax ?? 60) * Math.PI / 180;
+    const zoomMin = cameraConfig.zoomMin ?? 300;
+    const zoomMax = cameraConfig.zoomMax ?? 900;
 
+    console.log("camera.js: aplicando rotationRestriction", { minPolarAngle: polarMin, maxPolarAngle: polarMax });
     camera.rotationRestriction = {
-      horizontal: { min: -Infinity, max: Infinity },
-      vertical: { min: cfg.polarMin, max: cfg.polarMax }
+      minPolarAngle: polarMin,
+      maxPolarAngle: polarMax
     };
 
+    console.log("camera.js: aplicando zoomRestriction", { minDistance: zoomMin, maxDistance: zoomMax });
     camera.zoomRestriction = {
-      minDistance: cfg.zoomMin,
-      maxDistance: cfg.zoomMax
+      minDistance: zoomMin,
+      maxDistance: zoomMax
     };
 
-    if (camera.enablePan !== undefined) {
-      camera.enablePan = cfg.enablePan;
+    if (typeof camera.enablePan !== "undefined") {
+      camera.enablePan = cameraConfig.enablePan !== false;
     }
-    if (camera.enableRotation !== undefined) {
-      camera.enableRotation = cfg.enableRotation;
+    if (typeof camera.enableRotation !== "undefined") {
+      camera.enableRotation = cameraConfig.enableRotation !== false;
     }
 
-    if (camera.spherePositionRestriction !== undefined) {
-      camera.spherePositionRestriction = { radius: 0 };
-    }
+    console.log("camera.js: restricoes aplicadas com sucesso");
   }
 
-  function focusOn(target, position) {
-    const viewport = window.shapediverAPI?.getViewport?.();
-    const camera = viewport?.camera;
-    if (!camera) {
-      return;
-    }
-    const anim = [{ position: position, target: target }];
-    if (camera.animate) {
-      camera.animate(anim, { duration: 600 });
+  window.addEventListener("sdv-ready", function (e) {
+    const vp = (e.detail && e.detail.viewport) || (window.shapediverAPI && window.shapediverAPI.getViewport());
+    if (vp) {
+      initCamera(vp);
     } else {
-      camera.position = position;
-      camera.target = target;
-    }
-  }
-
-  window.addEventListener("sdv-ready", () => {
-    const viewport = window.shapediverAPI?.getViewport?.();
-    if (viewport) {
-      initCamera(viewport);
+      console.warn("camera.js: viewport nao encontrado");
     }
   });
-
-  window.configuradorCamera = { focusOn };
 })();
