@@ -7,15 +7,20 @@
       return;
     }
     const camera = viewport.camera;
-    const polarMin = (cameraConfig.polarMin ?? 45) * Math.PI / 180;
-    const polarMax = (cameraConfig.polarMax ?? 60) * Math.PI / 180;
+    const polarMin = cameraConfig.polarMin ?? 45;
+    const polarMax = cameraConfig.polarMax ?? 60;
     const zoomMin = cameraConfig.zoomMin ?? 300;
     const zoomMax = cameraConfig.zoomMax ?? 900;
 
-    console.log("camera.js: aplicando rotationRestriction", { minPolarAngle: polarMin, maxPolarAngle: polarMax });
+    console.log("camera.js: aplicando rotationRestriction (graus)", {
+      minPolarAngle: polarMin, maxPolarAngle: polarMax,
+      minAzimuthAngle: -Infinity, maxAzimuthAngle: Infinity
+    });
     camera.rotationRestriction = {
       minPolarAngle: polarMin,
-      maxPolarAngle: polarMax
+      maxPolarAngle: polarMax,
+      minAzimuthAngle: -Infinity,
+      maxAzimuthAngle: Infinity
     };
 
     console.log("camera.js: aplicando zoomRestriction", { minDistance: zoomMin, maxDistance: zoomMax });
@@ -23,13 +28,6 @@
       minDistance: zoomMin,
       maxDistance: zoomMax
     };
-
-    if (typeof camera.enablePan !== "undefined") {
-      camera.enablePan = cameraConfig.enablePan !== false;
-    }
-    if (typeof camera.enableRotation !== "undefined") {
-      camera.enableRotation = cameraConfig.enableRotation !== false;
-    }
 
     console.log("camera.js: restricoes aplicadas com sucesso");
   }
