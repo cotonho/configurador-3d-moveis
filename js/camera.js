@@ -75,8 +75,8 @@
 
     canvas.addEventListener("pointerdown", function (e) {
       if (e.button !== 2) return;
-      e.stopImmediatePropagation();
       e.preventDefault();
+      e.stopPropagation();
       isPanning = true;
       lastX = e.clientX;
       lastY = e.clientY;
@@ -85,8 +85,6 @@
 
     canvas.addEventListener("pointermove", function (e) {
       if (!isPanning) return;
-      e.stopImmediatePropagation();
-      e.preventDefault();
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
       lastX = e.clientX;
@@ -97,30 +95,28 @@
       const tgt = cameraApi.target;
       if (!pos || !tgt) return;
 
-      const fX = tgt[0] - pos[0];
-      const fY = tgt[1] - pos[1];
-      const fZ = tgt[2] - pos[2];
-      const fLen = Math.sqrt(fX * fX + fY * fY + fZ * fZ);
+      const nfX = tgt[0] - pos[0];
+      const nfY = tgt[1] - pos[1];
+      const nfZ = tgt[2] - pos[2];
+      const fLen = Math.sqrt(nfX * nfX + nfY * nfY + nfZ * nfZ);
       if (fLen === 0) return;
-      const nfX = fX / fLen, nfY = fY / fLen, nfZ = fZ / fLen;
+      const fx = nfX / fLen, fy = nfY / fLen, fz = nfZ / fLen;
 
-      const rX = -nfY, rY = nfX, rZ = 0;
-      const rLen = Math.sqrt(rX * rX + rY * rY);
-      const nrX = rLen > 0 ? rX / rLen : 0;
-      const nrY = rLen > 0 ? rY / rLen : 0;
+      const rx = -fy, ry = fx, rz = 0;
+      const rLen = Math.sqrt(rx * rx + ry * ry);
+      const nrx = rLen > 0 ? rx / rLen : 0;
+      const nry = rLen > 0 ? ry / rLen : 0;
 
-      const uX = nfY * 0 - nfZ * nrY;
-      const uY = nfZ * nrX - nfX * 0;
-      const uZ = nfX * nrY - nfY * nrX;
-      const uLen = Math.sqrt(uX * uX + uY * uY + uZ * uZ);
-      const nuX = uLen > 0 ? uX / uLen : 0;
-      const nuY = uLen > 0 ? uY / uLen : 0;
-      const nuZ = uLen > 0 ? uZ / uLen : 0;
+      const ux = nry * fz, uy = -nrx * fz, uz = nrx * fy - nry * fx;
+      const uLen = Math.sqrt(ux * ux + uy * uy + uz * uz);
+      const nux = uLen > 0 ? ux / uLen : 0;
+      const nuy = uLen > 0 ? uy / uLen : 0;
+      const nuz = uLen > 0 ? uz / uLen : 0;
 
       const sensitivity = 0.5;
-      const offX = (-dx * nrX + dy * nuX) * sensitivity;
-      const offY = (-dx * nrY + dy * nuY) * sensitivity;
-      const offZ = (-dx * 0 + dy * nuZ) * sensitivity;
+      const offX = (dx * nrx + dy * nux) * sensitivity;
+      const offY = (dx * nry + dy * nuy) * sensitivity;
+      const offZ = (dy * nuz) * sensitivity;
 
       scene.children.forEach(function (child) {
         child.position.x += offX;
@@ -131,14 +127,13 @@
 
     canvas.addEventListener("pointerup", function (e) {
       if (e.button !== 2) return;
-      e.stopImmediatePropagation();
       isPanning = false;
       canvas.releasePointerCapture(e.pointerId);
     }, { capture: true });
 
-    canvas.addEventListener("pointerleave", function (e) {
+    canvas.addEventListener("pointerleave", function () {
       isPanning = false;
-    }, { capture: true });
+    });
 
     canvas.addEventListener("contextmenu", function (e) {
       e.preventDefault();
