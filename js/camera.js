@@ -12,10 +12,6 @@
     const zoomMin = cameraConfig.zoomMin ?? 300;
     const zoomMax = cameraConfig.zoomMax ?? 900;
 
-    console.log("camera.js: aplicando rotationRestriction (graus)", {
-      minPolarAngle: polarMin, maxPolarAngle: polarMax,
-      minAzimuthAngle: -Infinity, maxAzimuthAngle: Infinity
-    });
     camera.rotationRestriction = {
       minPolarAngle: polarMin,
       maxPolarAngle: polarMax,
@@ -23,13 +19,31 @@
       maxAzimuthAngle: Infinity
     };
 
-    console.log("camera.js: aplicando zoomRestriction", { minDistance: zoomMin, maxDistance: zoomMax });
     camera.zoomRestriction = {
       minDistance: zoomMin,
       maxDistance: zoomMax
     };
 
-    console.log("camera.js: restricoes aplicadas com sucesso");
+    if (typeof camera.enablePan !== "undefined") {
+      camera.enablePan = true;
+    }
+    if (typeof camera.enableTurntableControls !== "undefined") {
+      camera.enableTurntableControls = false;
+    }
+
+    if (camera.input !== undefined) {
+      camera.input = {
+        mouse: { rotate: 0, zoom: 1, pan: 2 },
+        touch: { rotate: 1, zoom: 2, pan: 2 }
+      };
+    }
+
+    console.log("camera.js: restricoes aplicadas", {
+      rotationRestriction: camera.rotationRestriction,
+      zoomRestriction: camera.zoomRestriction,
+      enablePan: typeof camera.enablePan !== "undefined" ? camera.enablePan : "N/A",
+      enableTurntableControls: typeof camera.enableTurntableControls !== "undefined" ? camera.enableTurntableControls : "N/A"
+    });
   }
 
   window.addEventListener("sdv-ready", function (e) {
