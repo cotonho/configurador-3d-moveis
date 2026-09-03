@@ -25,7 +25,8 @@ room: {
     heightM: 2.7,
     wallThicknessM: 0.15,
     floorThicknessM: 0.1,
-    furnitureScale: 3,
+    modelUnits: "in", // unidade do modelo: mm | cm | m | in | ft (converte sozinho p/ a sala)
+    // furnitureScale: 2.54, // opcional: trava a escala manual e ignora modelUnits
     position: [0, 0, 0],
     hideScenery: true,
 wallCulling: {
