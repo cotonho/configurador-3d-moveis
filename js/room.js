@@ -196,7 +196,6 @@
     const furnitureBox = new THREE.Box3();
     let lastCenterUpdate = 0;
     const targetVec = new THREE.Vector3();
-    let probeSlider = null;
 
     function collectMeshes(obj, out) {
       obj.children.forEach((child) => {
@@ -374,100 +373,127 @@
 
     let debugEl = null;
 
-    function createProbe() {
-      if (probeSlider || roomConfig.debug !== true) {
-        return;
+    // Cotas do móvel: 3 linhas (X/Y/Z da caixa) + etiquetas HTML que
+    // acompanham a câmera. Medidas em unidades da cena (cm por padrão).
+    const dimsOn = roomConfig.dimensions !== false;
+    const dimsGroup = new THREE.Group();
+    dimsGroup.name = "furniture-dimensions";
+    const dimLineMat = new THREE.LineBasicMaterial({
+      color:
+        roomConfig.dimensionsColor !== undefined ? roomConfig.dimensionsColor : 0x2f6fed,
+      transparent: true,
+      opacity: 0.9,
+      depthTest: false,
+      depthWrite: false
+    });
+    dimLineMat.renderOrder = 999;
+    let dimsKey = null;
+    let dimDefs = [];
+    const dimLabels = [];
+    const dimCanvas =
+      document.getElementById(
+        (window.SD_CONFIG && window.SD_CONFIG.canvasId) || "canvas"
+      ) || document.getElementById("canvas");
+    if (dimsOn) {
+      scene.add(dimsGroup);
+      for (let i = 0; i < 3; i++) {
+        const div = document.createElement("div");
+        div.className = "dim-label";
+        div.style.display = "none";
+        document.body.appendChild(div);
+        dimLabels.push(div);
       }
-      const el = document.createElement("div");
-      el.style.cssText =
-        "position:absolute;left:16px;bottom:20px;z-index:20;font:11px monospace;color:#1d2733;background:rgba(255,255,255,0.85);padding:4px 10px;border-radius:8px;border:1px solid #dfe5ec;display:flex;align-items:center;gap:8px;";
-      const label = document.createElement("span");
-      label.textContent = "dist alvo:";
-      probeSlider = document.createElement("input");
-      probeSlider.type = "range";
-      probeSlider.min = "0";
-      probeSlider.max = "2000";
-      probeSlider.step = "0.5";
-      probeSlider.value = "1000";
-      probeSlider.style.width = "240px";
-      probeSlider.addEventListener("input", () => {
-        const d = Number(probeSlider.value);
-        const toTarget = tmp.copy(targetVec).sub(camPos);
-        if (toTarget.lengthSq() > 1e-9) {
-          toTarget.normalize();
-        }
-        camPos.copy(targetVec).addScaledVector(toTarget, -d);
-        camera.position = [camPos.x, camPos.y, camPos.z];
-      });
-      el.append(label, probeSlider);
-      document.body.appendChild(el);
-      createRoomSliders();
     }
 
-    function createRoomSliders() {
-      const panel = document.createElement("div");
-      panel.style.cssText =
-        "position:absolute;left:16px;bottom:56px;z-index:20;font:11px monospace;color:#1d2733;background:rgba(255,255,255,0.85);padding:6px 10px;border-radius:8px;border:1px solid #dfe5ec;display:flex;flex-direction:column;gap:4px;";
+    function fmtDim(v) {
+      return Math.round(v) + " cm";
+    }
 
-      function makeSlider(label, axis, min, max) {
-        const row = document.createElement("div");
-        row.style.cssText = "display:flex;align-items:center;gap:6px;";
-        const lbl = document.createElement("span");
-        lbl.textContent = label + ":";
-        lbl.style.width = "28px";
-        const val = document.createElement("span");
-        val.style.width = "50px";
-        val.textContent = "0";
-        const sl = document.createElement("input");
-        sl.type = "range";
-        sl.min = String(min);
-        sl.max = String(max);
-        sl.step = "1";
-        sl.value = "0";
-        sl.style.width = "160px";
-        sl.addEventListener("input", () => {
-          const v = Number(sl.value);
-          const old = roomRoot.position[axis];
-          roomRoot.position[axis] = v;
-          if (typeof window._clampRoomRoot === "function") window._clampRoomRoot();
-          const applied = roomRoot.position[axis] - old;
-          // Mantém o pivô (foco) colado na sala: translada o target junto.
-          if (applied !== 0 && viewport && viewport.camera) {
-            const idx = axis === "x" ? 0 : axis === "y" ? 1 : 2;
-            const t = viewport.camera.target;
-            if (t && typeof t.length === "number" && t.length >= 3) {
-              const nt = [t[0], t[1], t[2]];
-              nt[idx] += applied;
-              viewport.camera.target = nt;
-            }
-          }
-          // Move o mobiliário junto (translação simples, sem tocar na escala;
-          // grupos mortos de customize são podados).
-          if (applied !== 0) {
-            for (let i = scaledFurniture.length - 1; i >= 0; i--) {
-              const g = scaledFurniture[i];
-              if (!g.parent) {
-                scaledFurniture.splice(i, 1);
-                continue;
-              }
-              if (axis === "x") g.position.x += applied;
-              else if (axis === "y") g.position.y += applied;
-              else g.position.z += applied;
-            }
-          }
-          sl.value = String(Math.round(roomRoot.position[axis]));
-          val.textContent = sl.value;
-        });
-        row.append(lbl, val, sl);
-        return row;
+    function rebuildDimensions(box) {
+      if (!dimsOn) return;
+      const key = box
+        ? [box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z]
+            .map(Math.round)
+            .join(",")
+        : "null";
+      if (key === dimsKey) return;
+      dimsKey = key;
+      while (dimsGroup.children.length) {
+        const child = dimsGroup.children.pop();
+        dimsGroup.remove(child);
+        if (child.geometry) child.geometry.dispose();
       }
+      dimDefs = [];
+      dimLabels.forEach((el) => {
+        el.style.display = "none";
+      });
+      if (!box) return;
+      const m = 8;
+      const t = 6;
+      const min = box.min;
+      const max = box.max;
+      const pts = [];
+      function seg(ax, ay, az, bx, by, bz) {
+        pts.push(ax, ay, az, bx, by, bz);
+      }
+      seg(min.x, max.y + m, min.z, max.x, max.y + m, min.z);
+      seg(min.x, max.y + m - t, min.z, min.x, max.y + m + t, min.z);
+      seg(max.x, max.y + m - t, min.z, max.x, max.y + m + t, min.z);
+      seg(max.x + m, min.y, min.z, max.x + m, max.y, min.z);
+      seg(max.x + m - t, min.y, min.z, max.x + m + t, min.y, min.z);
+      seg(max.x + m - t, max.y, min.z, max.x + m + t, max.y, min.z);
+      seg(max.x + m, max.y + m, min.z, max.x + m, max.y + m, max.z);
+      seg(max.x + m - t, max.y + m, min.z, max.x + m + t, max.y + m, min.z);
+      seg(max.x + m - t, max.y + m, max.z, max.x + m + t, max.y + m, max.z);
+      dimDefs = [
+        {
+          text: fmtDim(max.x - min.x),
+          at: [(min.x + max.x) / 2, max.y + m + 12, min.z]
+        },
+        {
+          text: fmtDim(max.y - min.y),
+          at: [max.x + m + 12, (min.y + max.y) / 2, min.z]
+        },
+        {
+          text: fmtDim(max.z - min.z),
+          at: [max.x + m + 12, max.y + m + 12, (min.z + max.z) / 2]
+        }
+      ];
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+      const lines = new THREE.LineSegments(g, dimLineMat);
+      lines.renderOrder = 999;
+      lines.frustumCulled = false;
+      dimsGroup.add(lines);
+      while (dimLabels.length < dimDefs.length) {
+        const div = document.createElement("div");
+        div.className = "dim-label";
+        div.style.display = "none";
+        document.body.appendChild(div);
+        dimLabels.push(div);
+      }
+      dimDefs.forEach((d, i) => {
+        dimLabels[i].textContent = d.text;
+      });
+    }
 
-      panel.append(
-        makeSlider("X", "x", -Math.round(WIDTH / 2), Math.round(WIDTH / 2)),
-        makeSlider("Y", "y", -Math.round(DEPTH / 2), Math.round(DEPTH / 2)),
-        makeSlider("Z", "z", -Math.round(HEIGHT / 2), Math.round(HEIGHT / 2))
-      );
-      document.body.appendChild(panel);
+    function updateDimLabels() {
+      if (!dimsOn || !dimDefs.length) return;
+      const tc = viewport.threeJsCoreObjects.camera;
+      if (!tc || !dimCanvas) return;
+      const rect = dimCanvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      dimDefs.forEach((d, i) => {
+        const el = dimLabels[i];
+        tmp.set(d.at[0], d.at[1], d.at[2]).project(tc);
+        if (tmp.z > 1 || tmp.z < -1) {
+          el.style.display = "none";
+          return;
+        }
+        el.style.display = "block";
+        el.style.left = rect.left + (tmp.x * 0.5 + 0.5) * rect.width + "px";
+        el.style.top = rect.top + (-tmp.y * 0.5 + 0.5) * rect.height + "px";
+      });
     }
 
     function updateDebug(box, limit) {
@@ -481,7 +507,6 @@
           "position:absolute;left:16px;bottom:140px;z-index:20;font:11px monospace;color:#1d2733;background:rgba(255,255,255,0.85);padding:6px 10px;border-radius:8px;border:1px solid #dfe5ec;white-space:pre;";
         document.body.appendChild(debugEl);
       }
-      createProbe();
       const wallsState = walls
         .map((w) => w.userData.name + ":" + (w.userData.hidden ? "S" : "N"))
         .join(" ");
@@ -551,8 +576,10 @@
       ensureFurnitureScaled();
       const box = computeFurnitureBox();
       if (!box) {
+        rebuildDimensions(null);
         return;
       }
+      rebuildDimensions(box);
       const limit = furnitureDiagLimit();
       hideScenery(limit);
       box.getCenter(center);
@@ -574,6 +601,7 @@
 
     function update() {
       updateFurnitureCenter(performance.now());
+      updateDimLabels();
       vec3Of(
         camera.position ||
         camera.worldPosition ||
@@ -585,10 +613,6 @@
       if (camera.target !== undefined) {
         vec3Of(camera.target, targetVec);
       }
-      if (probeSlider && probeSlider !== document.activeElement) {
-        probeSlider.value = String(camPos.distanceTo(targetVec));
-      }
-
       if (WALL_CULLING_ENABLED) {
         const roomWorld = room.getWorldPosition(tmp);
         const cx = roomWorld.x;

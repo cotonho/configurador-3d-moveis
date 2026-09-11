@@ -1,142 +1,44 @@
-console.log('camera.js carregado - versão TESTE18');
-
-try {
-  var _dbgVp = window.shapediverAPI ? window.shapediverAPI.getViewport() : null;
-  var _dbgTc = _dbgVp && _dbgVp.threeJsCoreObjects ? _dbgVp.threeJsCoreObjects.camera : null;
-  console.log('[PAN] fov-check: threeCamera.fov=' + (_dbgTc ? _dbgTc.fov : 'n/a') +
-    ' aspect=' + (_dbgTc ? _dbgTc.aspect : 'n/a') +
-    ' canvasW=' + (document.getElementById('canvas') ? document.getElementById('canvas').clientWidth : 'n/a'));
-} catch (err) {
-  console.log('[PAN] fov-check indisponivel (viewport ainda nao criado)');
-}
-
 (function () {
   const cameraConfig = (window.SD_CONFIG && window.SD_CONFIG.camera) || {};
 
   function initCamera(viewport) {
     if (!viewport || !viewport.camera) return;
     const cameraApi = viewport.camera;
-    window.__debugCameraApi = cameraApi;
     const threeCamera = viewport.threeJsCoreObjects.camera;
 
     applyCameraSettings(cameraApi);
 
-    console.log('[CAMERA INIT] enablePan antes=' + cameraApi.enablePan);
     cameraApi.enablePan = false;
-    console.log('[CAMERA INIT] enablePan depois=' + cameraApi.enablePan);
-    console.log('[CAMERA INIT] enableZoom antes=' + cameraApi.enableZoom);
     cameraApi.enableZoom = false;
-    console.log('[CAMERA INIT] enableZoom depois=' + cameraApi.enableZoom);
-    console.log('[CAMERA INIT] enableRotation antes=' + cameraApi.enableRotation);
     cameraApi.enableRotation = true;
-    console.log('[CAMERA INIT] enableRotation depois=' + cameraApi.enableRotation);
-    console.log('[CAMERA INIT] autoAdjust antes=' + cameraApi.autoAdjust);
     cameraApi.autoAdjust = false;
     cameraApi.initialAutoAdjust = false;
-    console.log('[CAMERA INIT] autoAdjust depois=' + cameraApi.autoAdjust);
-
-    // Hook diagnóstico (baixo volume): bbox via event engine do SDV
-    try {
-      var SDV = window.SDV || {};
-      var sdvType = (SDV.EVENTTYPE_SCENE && SDV.EVENTTYPE_SCENE.SCENE_BOUNDING_BOX_CHANGE) || 'scene.boundingBoxChange';
-      if (typeof SDV.addListener === 'function') {
-        SDV.addListener(sdvType, function (e) {
-          console.log('[BOUNDING BOX CHANGE] raw=' + safeStringify(e));
-        });
-        console.log('[HOOK] boundingBox listener registrado, type=' + sdvType);
-      }
-    } catch (err) {
-      console.log('[HOOK] falha bbox: ' + (err && err.message));
-    }
 
     setupCustomPan(viewport, cameraApi, threeCamera);
-
-    console.log('[CAMERA INIT] autoRotation=' + cameraApi.enableAutoRotation +
-      ' speed=' + cameraApi.autoRotationSpeed +
-      ' revert=' + cameraApi.revertAtMouseUp +
-      ' damping=' + cameraApi.damping);
-    try {
-      var _c = document.getElementById(((window.SD_CONFIG && window.SD_CONFIG.canvasId) || 'canvas'));
-      console.log('[CAMERA INIT] three fov=' + threeCamera.fov + ' aspect=' + threeCamera.aspect +
-        ' canvas=' + (_c ? _c.clientWidth + 'x' + _c.clientHeight : '?') +
-        ' autoUpdate=' + threeCamera.matrixAutoUpdate);
-    } catch (err) {
-      console.log('[CAMERA INIT] fov-check falhou: ' + (err && err.message));
-    }
-
-    // Amostrador diagnóstico: loga a cada 500ms SOMENTE se posição/foco mudaram.
-    // Inclui sala (mundo), centro do móvel (mundo) e projeção NDC do móvel
-    // na tela (0,0 = centro): decide se o móvel está pregado no centro.
-    var lastSample = null;
-    setInterval(function () {
-      var tp = null;
-      try {
-        var tcp = threeCamera.position;
-        tp = '[' + tcp.x.toFixed(1) + ',' + tcp.y.toFixed(1) + ',' + tcp.z.toFixed(1) + ']';
-        var me = threeCamera.matrixWorld ? threeCamera.matrixWorld.elements : null;
-        if (me) tp += ' mW=[' + me[12].toFixed(1) + ',' + me[13].toFixed(1) + ',' + me[14].toFixed(1) + ']';
-      } catch (e) { tp = '?'; }
-      var s = safeStringify(cameraApi.position) + '|' + safeStringify(cameraApi.target) + '|three=' + tp;
-      if (s !== lastSample) {
-        var extra = '';
-        try {
-          var rr = window._roomRoot;
-          var rp = rr ? rr.position : null;
-          var b = (typeof window._debugFurnitureBox === 'function') ? window._debugFurnitureBox() : null;
-          var ndc = null;
-          if (b) {
-            var VC = threeCamera.position.constructor;
-            var v = new VC(b.cx, b.cy, b.cz);
-            v.project(threeCamera);
-            ndc = [v.x, v.y];
-          }
-          extra = ' room=' + (rp ? '[' + Math.round(rp.x) + ',' + Math.round(rp.y) + ',' + Math.round(rp.z) + ']' : '?') +
-            ' furn=' + (b ? '[' + Math.round(b.cx) + ',' + Math.round(b.cy) + ',' + Math.round(b.cz) + ']' : '?') +
-            ' ndc=' + (ndc ? '[' + ndc[0].toFixed(2) + ',' + ndc[1].toFixed(2) + ']' : '?');
-        } catch (err) {
-          extra = ' furnErr=' + (err && err.message);
-        }
-        console.log('[CAM SAMPLER] pos|target=' + s + extra);
-        lastSample = s;
-      }
-    }, 500);
   }
 
   function setupCustomPan(viewport, cameraApi, threeCamera) {
     if (!threeCamera) return;
     var cfg = (window.SD_CONFIG && window.SD_CONFIG.canvasId) || 'canvas';
     var canvas = document.getElementById(cfg) || document.getElementById('canvas');
-    if (!canvas) {
-      console.log('[PAN] canvas nao encontrado');
-      return;
-    }
+    if (!canvas) return;
 
     // Usa o Vector3 do mesmo realm do threeCamera (evita mistura de instâncias de Three.js)
     var V3 = threeCamera.position.constructor;
 
     // Esquema câmera-órbita: esquerdo = órbita NATIVA da câmera em torno
-    // da sala; direito = desliza a SALA no piso (custom). Nativo só no esquerdo.
+    // da sala; direito = translada CÂMERA+foco no piso (custom).
     var panning = false;
     var lastX = 0;
     var lastY = 0;
-    var panTick = 0;
 
     canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-
-    try {
-      var sdvCanvas = viewport.threeJsCoreObjects.renderer.domElement;
-      console.log('[PAN] canvas é o do SDV=' + (sdvCanvas === canvas) +
-        ' roomRoot=' + (!!window._roomRoot));
-    } catch (err) {
-      console.log('[PAN] checagem canvas falhou: ' + (err && err.message));
-    }
 
     canvas.addEventListener('pointerdown', function (e) {
       if (e.button !== 2) return;
       panning = true;
       lastX = e.clientX;
       lastY = e.clientY;
-      console.log('[PAN] down ok');
     });
 
     function stopPan() { panning = false; }
@@ -161,9 +63,11 @@ try {
       var roomRoot = window._roomRoot;
       if (!roomRoot) return;
 
-      // Pan estilo IKEA: só no piso (mundo XY), sem Z. Câmera E foco
-      // transladam juntos — offset preservado, restrict() nunca corrige.
-      // dx → direita-da-câmera no piso; dy → frente-no-piso.
+      // Pan no piso, nos eixos DA CÂMERA (direita e frente projetados no
+      // mundo XY, sem Z) — acompanha para onde você está olhando, inclusive
+      // após orbitar. Câmera E foco transladam juntos: offset preservado,
+      // então o restrict() do SDV nunca corrige. Estilo "agarrar": a sala
+      // acompanha o cursor. Foco limitado à caixa da sala.
       var p = toVec3Array(cameraApi.position);
       var t = toVec3Array(cameraApi.target);
       if (!p || !t) return;
@@ -173,8 +77,7 @@ try {
       var ox = px - tx, oy = py - ty, oz = pz - tz;
       var dist = Math.sqrt(ox * ox + oy * oy + oz * oz);
       if (!(dist > 1e-6)) return;
-      // Velocidade ancorada na sala (independente de fov, que se mostrou
-      // defasado): atravessar a tela = atravessar a sala.
+      // Velocidade ancorada na sala: atravessar a tela = atravessar a sala.
       var cw = (canvas && canvas.clientWidth) || 800;
       var span = 1000;
       try {
@@ -183,14 +86,25 @@ try {
       } catch (e) { /* mantém padrão */ }
       var s = span / cw;
 
-      // Botão direito: translada CÂMERA+foco só nos eixos X e Y do mundo
-      // (sem Z). Translação pura em eixos fixos → orbitar é impossível por
-      // construção. Horizontal invertido (estilo "agarrar": arrastar p/
-      // direita leva a sala p/ direita); vertical segue o mouse. O foco vai
-      // junto (offset preservado → restrict() nunca corrige), limitado à
-      // caixa da sala.
-      var mx = -dx * s;
-      var my = dy * s;
+      threeCamera.updateMatrixWorld();
+      var right = new V3();
+      var up = new V3();
+      var fwd = new V3();
+      if (threeCamera.matrixWorld && typeof threeCamera.matrixWorld.extractBasis === 'function') {
+        threeCamera.matrixWorld.extractBasis(right, up, fwd);
+      } else {
+        return;
+      }
+      var rx = right.x, ry = right.y;
+      var rlen = Math.sqrt(rx * rx + ry * ry);
+      if (rlen < 1e-6) { rx = 1; ry = 0; rlen = 1; }
+      rx /= rlen; ry /= rlen;
+      var fx = tx - px, fy = ty - py;
+      var flen = Math.sqrt(fx * fx + fy * fy);
+      if (flen < 1e-6) { fx = 0; fy = 1; flen = 1; }
+      fx /= flen; fy /= flen;
+      var mx = -(rx * (dx * s) + fx * (-dy * s));
+      var my = -(ry * (dx * s) + fy * (-dy * s));
 
       var lim = window._roomLimits || { x: 1e9, y: 1e9, z: 1e9 };
       var ntx = Math.max(-lim.x, Math.min(lim.x, tx + mx));
@@ -221,8 +135,6 @@ try {
       cameraApi.position = [p[0] - fx / d * step, p[1] - fy / d * step, p[2] - fz / d * step];
     }, { passive: false });
 
-    console.log('[PAN] esquerdo=orbita nativa, direito=move camera+foco XY, scroll=dolly');
-
     function toVec3Array(v) {
       if (!v) return null;
       if (typeof v.length === 'number' && v.length >= 3 && typeof v !== 'string') {
@@ -232,18 +144,6 @@ try {
         return [v.x, v.y, v.z];
       }
       return null;
-    }
-  }
-
-  function safeStringify(v) {
-    try {
-      if (v === null || v === undefined) return String(v);
-      if (typeof v.length === 'number' && typeof v !== 'string') {
-        try { return JSON.stringify(Array.from(v)); } catch (e) { /* fallback */ }
-      }
-      return JSON.stringify(v);
-    } catch (e) {
-      return Object.prototype.toString.call(v);
     }
   }
 
