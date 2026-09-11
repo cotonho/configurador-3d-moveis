@@ -40,9 +40,13 @@ body {
 .layout {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 300px 1fr;
   gap: 0;
   min-height: 0;
+}
+
+#side-panel-body .control-row {
+  margin-bottom: 12px;
 }
 
 .viewer-wrap {
@@ -50,15 +54,25 @@ body {
   height: calc(100vh - 57px);
 }
 
-#status-bar {
-  position: absolute;
-  left: 16px;
-  bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 20;
+#side-panel .price-box {
+  margin-bottom: 16px;
+}
+
+#side-panel .warnings {
+  margin-top: 16px;
+}
+
+.dim-label {
+  position: fixed;
+  z-index: 15;
+  transform: translate(-50%, -50%);
+  background: rgba(29, 39, 51, 0.85);
+  color: #fff;
+  font: 600 11px/1.4 "Segoe UI", system-ui, sans-serif;
+  padding: 2px 8px;
+  border-radius: 10px;
   pointer-events: none;
+  white-space: nowrap;
 }
 
 #canvas-container {
@@ -221,79 +235,21 @@ body {
   color: var(--accent);
 }
 
-.float-menu {
-  position: fixed;
-  z-index: 30;
-  display: none;
-  width: 250px;
-  max-height: 60vh;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(29, 39, 51, 0.2);
-  overflow: hidden;
-}
-
-.float-menu.visible {
-  display: block;
-}
-
-.float-menu-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--accent-light);
-  border-bottom: 1px solid var(--border);
-}
-
-.float-menu-title {
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.float-menu-close {
-  border: none;
-  background: none;
-  font-size: 20px;
-  line-height: 1;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.float-menu-close:hover {
-  color: var(--text);
-}
-
-.float-menu-body {
-  padding: 12px 14px;
-  overflow-y: auto;
-  max-height: calc(60vh - 41px);
-}
-
-.float-menu-body .control-row {
-  margin-bottom: 12px;
-}
-
-.float-menu-body .control-label {
+#side-panel-body .control-label {
   font-size: 12px;
 }
 
-.float-menu-body .control-slider {
-  width: 100%;
-}
-
-.float-menu-body .choice-btn {
+#side-panel-body .choice-btn {
   font-size: 11px;
   padding: 5px 9px;
 }
 
-.float-menu-body .choice-swatch {
+#side-panel-body .choice-swatch {
   width: 28px;
   height: 28px;
 }
 
-.float-menu-body .control-color {
+#side-panel-body .control-color {
   height: 34px;
 }
 

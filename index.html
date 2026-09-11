@@ -12,19 +12,21 @@
   </header>
 
   <main class="layout">
+    <aside id="side-panel" class="panel">
+      <h2 id="side-panel-title">Atributos do movel</h2>
+      <div class="price-box">
+        <span>Preco estimado:</span>
+        <strong id="price">-</strong>
+      </div>
+      <div id="side-panel-body"></div>
+      <ul id="warnings" class="warnings"></ul>
+    </aside>
     <section class="viewer-wrap">
       <div id="canvas-container">
         <canvas id="canvas"></canvas>
       </div>
       <div id="overlay">
         <p>Carregando modelo 3D...</p>
-      </div>
-      <div id="status-bar">
-        <div class="price-box">
-          <span>Preco estimado:</span>
-          <strong id="price">-</strong>
-        </div>
-        <ul id="warnings" class="warnings"></ul>
       </div>
     </section>
   </main>
@@ -36,6 +38,7 @@
   <script src="js/pricing.js"></script>
   <script src="js/main.js"></script>
   <script src="js/room.js"></script>
+  <script src="js/camera.js"></script>
   <script src="js/menu.js"></script>
 </body>
 </html>
