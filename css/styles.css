@@ -82,6 +82,28 @@ body {
   color: var(--accent);
 }
 
+#rotate-toggle {
+  flex: 1;
+  padding: 8px 12px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#rotate-toggle.active {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+#rotate-panel {
+  margin-bottom: 16px;
+}
+
 #side-panel .warnings {
   margin-top: 16px;
 }

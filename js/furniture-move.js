@@ -16,6 +16,9 @@
 
   function setMoveMode(on) {
     window.furnitureMoveMode = !!on;
+    if (on && typeof window.setFurnitureRotateMode === "function") {
+      window.setFurnitureRotateMode(false);
+    }
     const btn = document.getElementById("move-toggle");
     if (btn) btn.classList.toggle("active", !!on);
     const canvas =

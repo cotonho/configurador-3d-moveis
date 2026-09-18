@@ -223,10 +223,12 @@
 
     // Diagonal da malha em unidades do MODELO (divide a escala acumulada).
     // Estável mesmo depois de escalarmos grupos: o limite nunca explode.
+    // Math.abs: ancestral espelhado (escala negativa) gerava diag negativa,
+    // que passava no filtro (<= limite) e poluía a união com o piso 400x400.
     function modelDiagOf(mesh) {
       const b = new THREE.Box3();
       b.setFromObject(mesh);
-      return b.getSize(new THREE.Vector3()).length() / worldScaleOf(mesh);
+      return Math.abs(b.getSize(new THREE.Vector3()).length() / worldScaleOf(mesh));
     }
 
     function furnitureDiagLimit() {
@@ -258,20 +260,63 @@
       if (!meshes.length) {
         return null;
       }
-      const limit = furnitureDiagLimit();
-      const box = new THREE.Box3();
-      let used = 0;
-      meshes.forEach((mesh) => {
-        const b = new THREE.Box3();
-        b.setFromObject(mesh);
-        const diag = b.getSize(new THREE.Vector3()).length();
-        if (diag > limit) {
-          return;
-        }
-        box.union(furnitureBox.setFromObject(mesh));
-        used++;
+      // Mede com o yaw zerado (temporário): AABB de caixa girada infla e
+      // desgirar os cantos depois NÃO recupera o real (180/41 a 60° vira
+      // 215.5/196.9 — provado). Restaura tudo em finally, sem render no meio.
+      // Usa modelDiagOf no filtro (unidades do modelo, como o limite).
+      const saved = [];
+      scaledFurniture.forEach((g) => {
+        if (!g.parent) return;
+        g.userData = g.userData || {};
+        const base =
+          typeof g.userData._rotBase === "number" ? g.userData._rotBase : null;
+        if (base === null || g.rotation.z === base) return;
+        saved.push([g, g.rotation.z]);
+        g.rotation.z = base;
+        g.updateMatrixWorld(true);
       });
-      return used ? box : null;
+      try {
+        const limit = furnitureDiagLimit();
+        const verbose = window.__DIM_VERBOSE === true;
+        if (verbose) {
+          console.log('[DIM-MESH] grupos em _furnitureGroups: ' +
+            scaledFurniture.map((g) => (g.name || g.type) + '#' + String(g.uuid).slice(0, 8)).join(' | '));
+          console.log('[DIM-MESH] limite=' + Math.round(limit) + ' totalMeshes=' + meshes.length);
+        }
+        const box = new THREE.Box3();
+        let used = 0;
+        meshes.forEach((mesh) => {
+          if (mesh.isMesh !== true) {
+            if (verbose) {
+              console.log('[DIM-MESH] NAO-MESH pulado:', mesh.type,
+                '#' + String(mesh.uuid).slice(0, 8));
+            }
+            return;
+          }
+          const d = modelDiagOf(mesh);
+          const kept = d <= limit;
+          if (verbose) {
+            let top = mesh.parent;
+            while (top && top.parent && top.parent !== scene) top = top.parent;
+            console.log('[DIM-MESH]', mesh.name || mesh.type,
+              'ctor=' + (mesh.constructor && mesh.constructor.name),
+              '#' + String(mesh.uuid).slice(0, 8),
+              'top=' + (top ? (top.name || top.type) : '?'),
+              'diag=' + Math.round(d), kept ? 'INCLUIDA' : 'excluida');
+          }
+          if (!kept) {
+            return;
+          }
+          box.union(furnitureBox.setFromObject(mesh));
+          used++;
+        });
+        return used ? box : null;
+      } finally {
+        saved.forEach(([g, rz]) => {
+          g.rotation.z = rz;
+          g.updateMatrixWorld(true);
+        });
+      }
     }
 
     // Subárvore com câmera/luz do SDV: nunca tocar (shadow rig etc).
@@ -380,6 +425,14 @@
           g.position.y = want[1];
           g.updateMatrixWorld(true);
         }
+        // Reimpõe o giro desejado (slider) se o SDV resetou.
+        if (typeof g.userData._rotAbs === "number") {
+          const wantR = (g.userData._rotBase || 0) + g.userData._rotAbs;
+          if (g.rotation.z !== wantR) {
+            g.rotation.z = wantR;
+            g.updateMatrixWorld(true);
+          }
+        }
       }
     }
 
@@ -421,10 +474,37 @@
       return Math.round(v) + " cm";
     }
 
+    // Yaw atual do móvel (0 se nunca girado): as cotas vivem no
+    // referencial dele e giram junto via dimsGroup.
+    function furnitureYaw() {
+      const groups = window._furnitureGroups || [];
+      for (const g of groups) {
+        const u = g.userData || {};
+        if (typeof u._rotAbs === "number") return u._rotAbs;
+      }
+      return 0;
+    }
+
     function rebuildDimensions(box) {
       if (!dimsOn) return;
+      const yaw = furnitureYaw();
+      if (box) {
+        console.log('[DIM] box cru min=[' + Math.round(box.min.x) + ',' + Math.round(box.min.y) + ',' + Math.round(box.min.z) +
+          '] max=[' + Math.round(box.max.x) + ',' + Math.round(box.max.y) + ',' + Math.round(box.max.z) +
+          '] yawDeg=' + Math.round((yaw * 180) / Math.PI));
+      } else {
+        console.log('[DIM] box cru = null');
+      }
       const key = box
-        ? [box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z]
+        ? [
+            box.min.x,
+            box.min.y,
+            box.min.z,
+            box.max.x,
+            box.max.y,
+            box.max.z,
+            (yaw * 180) / Math.PI
+          ]
             .map(Math.round)
             .join(",")
         : "null";
@@ -440,37 +520,54 @@
         el.style.display = "none";
       });
       if (!box) return;
+      // A caixa já vem medida com yaw zerado (ver computeFurnitureBox):
+      // tamanhos reais, sem inflação. O grupo posiciona/rotaciona as linhas.
+      const cx = (box.min.x + box.max.x) / 2;
+      const cy = (box.min.y + box.max.y) / 2;
+      const cz = (box.min.z + box.max.z) / 2;
+      const lx0 = box.min.x - cx;
+      const ly0 = box.min.y - cy;
+      const lx1 = box.max.x - cx;
+      const ly1 = box.max.y - cy;
+      const lz0 = box.min.z - cz;
+      const lz1 = box.max.z - cz;
       const m = 8;
       const t = 6;
-      const min = box.min;
-      const max = box.max;
       const pts = [];
       function seg(ax, ay, az, bx, by, bz) {
         pts.push(ax, ay, az, bx, by, bz);
       }
-      seg(min.x, max.y + m, min.z, max.x, max.y + m, min.z);
-      seg(min.x, max.y + m - t, min.z, min.x, max.y + m + t, min.z);
-      seg(max.x, max.y + m - t, min.z, max.x, max.y + m + t, min.z);
-      seg(max.x + m, min.y, min.z, max.x + m, max.y, min.z);
-      seg(max.x + m - t, min.y, min.z, max.x + m + t, min.y, min.z);
-      seg(max.x + m - t, max.y, min.z, max.x + m + t, max.y, min.z);
-      seg(max.x + m, max.y + m, min.z, max.x + m, max.y + m, max.z);
-      seg(max.x + m - t, max.y + m, min.z, max.x + m + t, max.y + m, min.z);
-      seg(max.x + m - t, max.y + m, max.z, max.x + m + t, max.y + m, max.z);
+      seg(lx0, ly1 + m, lz0, lx1, ly1 + m, lz0);
+      seg(lx0, ly1 + m - t, lz0, lx0, ly1 + m + t, lz0);
+      seg(lx1, ly1 + m - t, lz0, lx1, ly1 + m + t, lz0);
+      seg(lx1 + m, ly0, lz0, lx1 + m, ly1, lz0);
+      seg(lx1 + m - t, ly0, lz0, lx1 + m + t, ly0, lz0);
+      seg(lx1 + m - t, ly1, lz0, lx1 + m + t, ly1, lz0);
+      seg(lx1 + m, ly1 + m, lz0, lx1 + m, ly1 + m, lz1);
+      seg(lx1 + m - t, ly1 + m, lz0, lx1 + m + t, ly1 + m, lz0);
+      seg(lx1 + m - t, ly1 + m, lz1, lx1 + m + t, ly1 + m, lz1);
+      // Âncoras das etiquetas: ponto local -> mundo (gira junto).
+      const cw = Math.cos(yaw);
+      const sw = Math.sin(yaw);
+      function wpt(lx, ly, lz) {
+        return [cx + lx * cw - ly * sw, cy + lx * sw + ly * cw, cz + lz];
+      }
       dimDefs = [
         {
-          text: fmtDim(max.x - min.x),
-          at: [(min.x + max.x) / 2, max.y + m + 12, min.z]
+          text: fmtDim(lx1 - lx0),
+          at: wpt(0, ly1 + m + 12, lz0)
         },
         {
-          text: fmtDim(max.y - min.y),
-          at: [max.x + m + 12, (min.y + max.y) / 2, min.z]
+          text: fmtDim(ly1 - ly0),
+          at: wpt(lx1 + m + 12, 0, lz0)
         },
         {
-          text: fmtDim(max.z - min.z),
-          at: [max.x + m + 12, max.y + m + 12, (min.z + max.z) / 2]
+          text: fmtDim(lz1 - lz0),
+          at: wpt(lx1 + m + 12, ly1 + m + 12, 0)
         }
       ];
+      dimsGroup.position.set(cx, cy, cz);
+      dimsGroup.rotation.z = yaw;
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
       const lines = new THREE.LineSegments(g, dimLineMat);

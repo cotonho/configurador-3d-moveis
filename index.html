@@ -16,6 +16,12 @@
       <h2 id="side-panel-title">Atributos do movel</h2>
       <div class="toolbar">
         <button id="move-toggle" type="button" title="Arrastar move o móvel no piso">Mover móvel</button>
+        <button id="rotate-toggle" type="button" title="Girar o móvel no lugar">Rotacionar</button>
+      </div>
+      <div id="rotate-panel" style="display:none;">
+        <label class="control-label" for="rotate-slider">Rotação</label>
+        <input id="rotate-slider" class="control-slider" type="range" min="-180" max="180" step="1" value="0">
+        <span id="rotate-value" class="control-value">0°</span>
       </div>
       <div class="price-box">
         <span>Preco estimado:</span>
@@ -44,5 +50,6 @@
   <script src="js/camera.js"></script>
   <script src="js/menu.js"></script>
   <script src="js/furniture-move.js"></script>
+  <script src="js/furniture-rotate.js"></script>
 </body>
 </html>
