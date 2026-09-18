@@ -121,6 +121,7 @@
       roomRoot.position.z = Math.max(-ROOM_LIMIT.z, Math.min(ROOM_LIMIT.z, roomRoot.position.z));
     };
     const scaledFurniture = [];
+    window._furnitureGroups = scaledFurniture;
 
     const room = new THREE.Group();
     room.name = "room-frontend";
@@ -367,7 +368,18 @@
         processFurnitureNode(child, s, limit, floorTop, false);
       });
       for (let i = scaledFurniture.length - 1; i >= 0; i--) {
-        if (!scaledFurniture[i].parent) scaledFurniture.splice(i, 1);
+        const g = scaledFurniture[i];
+        if (!g.parent) {
+          scaledFurniture.splice(i, 1);
+          continue;
+        }
+        // Reimpõe a posição desejada (arrasto manual) se o SDV resetou.
+        const want = g.userData._wantXY;
+        if (want && (g.position.x !== want[0] || g.position.y !== want[1])) {
+          g.position.x = want[0];
+          g.position.y = want[1];
+          g.updateMatrixWorld(true);
+        }
       }
     }
 
@@ -479,6 +491,19 @@
 
     function updateDimLabels() {
       if (!dimsOn || !dimDefs.length) return;
+      // Oculta cotas quando a câmera passa da distância limite do móvel.
+      const maxDist =
+        roomConfig.dimensionsMaxDistance !== undefined
+          ? roomConfig.dimensionsMaxDistance
+          : 600;
+      if (camPos.distanceTo(center) > maxDist) {
+        dimsGroup.visible = false;
+        dimLabels.forEach((el) => {
+          el.style.display = "none";
+        });
+        return;
+      }
+      dimsGroup.visible = true;
       const tc = viewport.threeJsCoreObjects.camera;
       if (!tc || !dimCanvas) return;
       const rect = dimCanvas.getBoundingClientRect();

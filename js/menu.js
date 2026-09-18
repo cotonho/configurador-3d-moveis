@@ -191,4 +191,7 @@
 
   window.registerFurniture = registerFurniture;
   window.selectFurniture = selectFurniture;
+  window.getSelectedFurniture = function () {
+    return window.furnitureRegistry.find((e) => e.id === selectedId) || null;
+  };
 })();
