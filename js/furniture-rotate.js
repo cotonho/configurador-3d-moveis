@@ -40,7 +40,25 @@
     if (typeof window.getSelectedFurniture === "function") {
       entry = window.getSelectedFurniture();
     }
-    if (entry && entry.root && entry.root.parent) return [entry.root];
+    if (entry) {
+      if (typeof entry.getRoot === "function") {
+        try {
+          const r = entry.getRoot();
+          if (r && r.parent) return [r];
+        } catch (e) {}
+      }
+      if (Array.isArray(entry.roots) && entry.roots.length) {
+        const r = entry.roots.filter((g) => g && g.parent);
+        if (r.length) return r;
+        return [];
+      }
+      if (entry.root && entry.root.parent) return [entry.root];
+      if (!entry.root && !entry.roots) {
+        const known = window._furnitureGroups || [];
+        return known.filter((g) => g && g.parent);
+      }
+      return [];
+    }
     const known = window._furnitureGroups || [];
     return known.filter((g) => g && g.parent);
   }

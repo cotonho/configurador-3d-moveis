@@ -1,6 +1,18 @@
 window.SD_CONFIG = {
   ticket: "COLE_AQUI_SEU_TICKET_SHAPEDIVER",
   modelViewUrl: "https://sdr7euc1.eu-central-1.shapediver.com",
+  // Segundo móvel (e seguintes): descomente e preencha. Sem isso, vale só
+  // ticket/modelViewUrl acima como sessão única "main".
+  // models: [
+  //   { id: "main", label: "Armário", ticket: "...", modelViewUrl: "...", modelUnits: "in" },
+  //   { id: "cadeira", label: "Cadeira", ticket: "...", modelViewUrl: "...", modelUnits: "mm" }
+  // ],
+  // Catálogo de móveis para adicionar em tempo real (desenvolvedor cadastra).
+  // modelUnits por modelo: mm | cm | m | in | ft (cai em room.modelUnits se omitido).
+  // catalog: [
+  //   { id: "cadeira", label: "Cadeira", ticket: "...", modelViewUrl: "...", modelUnits: "mm" },
+  //   { id: "mesa", label: "Mesa", ticket: "...", modelViewUrl: "...", modelUnits: "mm" }
+  // ],
   canvasId: "canvas",
   productName: "Armario Modular",
   basePrice: 499,

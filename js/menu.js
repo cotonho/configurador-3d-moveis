@@ -76,21 +76,44 @@
     return false;
   }
 
+  // Resolve a raiz 3D da sessão (preguiçoso: só existe após os outputs).
+  function sessionRoot(viewport, session) {
+    try {
+      if (!viewport || !session || !session.node) return null;
+      const converted = session.node.convertedObject;
+      if (!converted) return null;
+      const root = converted[viewport.id];
+      return root && root.parent ? root : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   // Sobe na hierarquia até achar a raiz registrada que contém o objeto.
-  // Entrada sem root (sessão principal) aceita qualquer acerto fora da sala.
-  function ownerOf(obj) {
+  // Entrada sem root/roots (sessão principal legada) aceita qualquer acerto.
+  function ownerOf(viewport, obj) {
     let fallback = null;
     for (const entry of window.furnitureRegistry) {
-      if (!entry.root) {
+      const roots = [];
+      if (entry.root) roots.push(entry.root);
+      if (typeof entry.getRoot === "function") {
+        try {
+          const r = entry.getRoot();
+          if (r) roots.push(r);
+        } catch (e) {}
+      }
+      if (!roots.length) {
         fallback = entry;
         continue;
       }
-      let current = obj;
-      while (current) {
-        if (current === entry.root) {
-          return entry;
+      for (const root of roots) {
+        let current = obj;
+        while (current) {
+          if (current === root) {
+            return entry;
+          }
+          current = current.parent;
         }
-        current = current.parent;
       }
     }
     return fallback;
@@ -106,11 +129,19 @@
     const scene = core.scene;
     const camera = core.camera;
 
-    registerFurniture({
-      id: "main",
-      label: config.productName || "Atributos do movel",
-      root: null,
-      getParameters: () => window.shapediverAPI.getParameters()
+    window.shapediverAPI.getSessions().forEach((s) => {
+      registerFurniture({
+        id: s.id,
+        label: s.label,
+        // Raiz viva da SESSAO (getter: resolve na hora de ler, nunca stale).
+        // Sem o array compartilhado window._furnitureGroups aqui — ele
+        // juntava todos os moveis e fazia as cotas operarem sobre a cena
+        // toda. (move/rotate/ownerOf resolvem por getRoot() primeiro; o campo
+        // `roots` plural segue suportado como fallback, mas nao e usado aqui.)
+        get root() { return sessionRoot(viewport, s.session); },
+        getRoot: () => sessionRoot(viewport, s.session),
+        getParameters: () => window.shapediverAPI.getParameters(s.id)
+      });
     });
 
     function furnitureDiagLimit() {
@@ -174,7 +205,7 @@
       if (!hit) {
         return;
       }
-      const owner = ownerOf(hit.object);
+      const owner = ownerOf(viewport, hit.object);
       if (owner && owner.id !== selectedId) {
         selectFurniture(owner.id);
       }

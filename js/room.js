@@ -13,14 +13,21 @@
   // Conversão explícita unidade-do-modelo -> unidade-da-sala.
   // Ex.: modelo em polegadas + sala em cm/m (unitsPerMeter) = 0.0254 * 100.
   const METERS_PER_MODEL_UNIT = { mm: 0.001, cm: 0.01, m: 1, in: 0.0254, ft: 0.3048 };
-  function defaultFurnitureScale() {
-    const u = String(roomConfig.modelUnits || "in").toLowerCase();
-    const m = METERS_PER_MODEL_UNIT[u];
+  const warnedUnits = {};
+  function scaleForUnit(u) {
+    const key = String(u || roomConfig.modelUnits || "in").toLowerCase();
+    const m = METERS_PER_MODEL_UNIT[key];
     if (!m) {
-      console.warn('[ROOM] modelUnits desconhecido: "' + u + '", usando escala 1');
+      if (!warnedUnits[key]) {
+        warnedUnits[key] = true;
+        console.warn('[ROOM] modelUnits desconhecido: "' + key + '", usando escala 1');
+      }
       return 1;
     }
     return UNITS_PER_M * m;
+  }
+  function defaultFurnitureScale() {
+    return scaleForUnit();
   }
   const FURNITURE_SCALE = roomConfig.furnitureScale || defaultFurnitureScale();
   const CENTER = roomConfig.furnitureCenter || [0, 0.9, 0];
@@ -231,19 +238,55 @@
       return Math.abs(b.getSize(new THREE.Vector3()).length() / worldScaleOf(mesh));
     }
 
+    // Percentil alto (p90) das diagonais em UNIDADES DO MODELO: modelos com
+    // muitos meshes pequenos (parafusos, pes) e poucos paineis grandes nao
+    // tem mais a mediana ancorada nos pequenos. Trava minima 100 mantida.
+    // Retorna objeto: p90 em unidades do modelo + teto absoluto em cm (rede
+    // contra cenario embutido gigante que passe no percentil).
+    // Teto configuravel: roomConfig.maxFurniturePieceCm (default 400).
+    function limitForMeshes(meshes) {
+      const absCm = roomConfig.maxFurniturePieceCm || 400;
+      if (!meshes.length) {
+        return { p90: Infinity, absCm: absCm };
+      }
+      const diags = meshes
+        .map((mesh) => modelDiagOf(mesh))
+        .sort((a, b) => a - b);
+      const p90 = diags[Math.min(diags.length - 1, Math.floor(diags.length * 0.9))];
+      return {
+        p90: Math.max(p90 * (roomConfig.sceneryRatio || 4), 100),
+        absCm: absCm,
+      };
+    }
+
+    // cm por unidade do modelo de uma sessao (p/ converter o diag estimado).
+    function cmPerUnitForUnits(units) {
+      const sc = scaleForUnit(units || roomConfig.modelUnits || "in");
+      return sc > 0 ? sc : 1;
+    }
+
+    // Filtro duplo p/ um mesh: percentil (em unidades do modelo) + teto
+    // absoluto (diag estimado em cm). kept=false vem com o motivo.
+    function meshFilterResult(mesh, f, cmPerUnit) {
+      const d = modelDiagOf(mesh);
+      const cm = d * (cmPerUnit > 0 ? cmPerUnit : 1);
+      if (d > f.p90) return { kept: false, reason: "percentil", d: d, cm: cm };
+      if (cm > f.absCm) return { kept: false, reason: "teto_absoluto", d: d, cm: cm };
+      return { kept: true, reason: null, d: d, cm: cm };
+    }
+
     function furnitureDiagLimit() {
-      const diags = [];
       const meshes = [];
       collectMeshes(scene, meshes);
-      meshes.forEach((mesh) => {
-        diags.push(modelDiagOf(mesh));
-      });
-      diags.sort((a, b) => a - b);
-      if (!diags.length) {
-        return Infinity;
-      }
-      const median = diags[Math.floor(diags.length / 2)];
-      return Math.max(median * (roomConfig.sceneryRatio || 4), 100);
+      return limitForMeshes(meshes);
+    }
+
+    // Limite dentro da subárvore (mediana local): um modelo gigante não
+    // contamina o filtro do outro.
+    function limitForRoot(rootObj) {
+      const meshes = [];
+      collectMeshes(rootObj, meshes);
+      return limitForMeshes(meshes);
     }
 
     window._debugFurnitureBox = function () {
@@ -254,9 +297,43 @@
       return { cx: c.x, cy: c.y, cz: c.z, sx: s.x, sy: s.y, sz: s.z };
     };
 
-    function computeFurnitureBox() {
+    // Raízes do móvel selecionado (para cotas por seleção). null = tudo.
+    function selectedFurnitureRoots() {
+      let entry = null;
+      if (typeof window.getSelectedFurniture === "function") {
+        try {
+          entry = window.getSelectedFurniture();
+        } catch (e) {
+          entry = null;
+        }
+      }
+      if (!entry) return null;
+      // Raiz viva primeiro (cobre entradas registradas com root estatico):
+      // mesmo padrão de move/rotate/ownerOf.
+      if (typeof entry.getRoot === "function") {
+        try {
+          const r = entry.getRoot();
+          if (r && r.parent) return [r];
+        } catch (e) {}
+      }
+      if (Array.isArray(entry.roots)) {
+        const r = entry.roots.filter((g) => g && g.parent);
+        return r.length ? r : [];
+      }
+      if (entry.root && entry.root.parent) return [entry.root];
+      return null;
+    }
+
+    function computeFurnitureBox(roots) {
       const meshes = [];
-      collectMeshes(scene, meshes);
+      if (roots && roots.length) {
+        roots.forEach((r) => {
+          if (r.isMesh && r.geometry) meshes.push(r);
+          else collectMeshes(r, meshes);
+        });
+      } else if (!roots) {
+        collectMeshes(scene, meshes);
+      }
       if (!meshes.length) {
         return null;
       }
@@ -276,7 +353,18 @@
         g.updateMatrixWorld(true);
       });
       try {
-        const limit = furnitureDiagLimit();
+        const limit = limitForMeshes(meshes);
+        // cm/unidade por raiz de sessao (cache do passe): o teto absoluto
+        // precisa do diag em cm, e cada sessao tem sua propria unidade.
+        const scaleByRoot = lastSessionScales;
+        const cmPerUnitOf = (mesh) => {
+          let c = mesh;
+          while (c) {
+            if (scaleByRoot.has(c)) return scaleByRoot.get(c);
+            c = c.parent;
+          }
+          return FURNITURE_SCALE > 0 ? FURNITURE_SCALE : 1;
+        };
         const verbose = window.__DIM_VERBOSE === true;
         if (verbose) {
           console.log('[DIM-MESH] grupos em _furnitureGroups: ' +
@@ -293,8 +381,8 @@
             }
             return;
           }
-          const d = modelDiagOf(mesh);
-          const kept = d <= limit;
+          const fr = meshFilterResult(mesh, limit, cmPerUnitOf(mesh));
+          const kept = fr.kept;
           if (verbose) {
             let top = mesh.parent;
             while (top && top.parent && top.parent !== scene) top = top.parent;
@@ -302,7 +390,9 @@
               'ctor=' + (mesh.constructor && mesh.constructor.name),
               '#' + String(mesh.uuid).slice(0, 8),
               'top=' + (top ? (top.name || top.type) : '?'),
-              'diag=' + Math.round(d), kept ? 'INCLUIDA' : 'excluida');
+              'diag=' + Math.round(fr.d),
+              'diag_cm=' + Math.round(fr.cm),
+              kept ? 'INCLUIDA' : 'excluida(' + fr.reason + ')');
           }
           if (!kept) {
             return;
@@ -361,10 +451,10 @@
           node.userData._floorZ = floorTop;
         }
         if (scaledFurniture.indexOf(node) === -1) scaledFurniture.push(node);
-        return;
+        return false;
       }
       const b0 = measureKept(kept);
-      if (b0.isEmpty()) return;
+      if (b0.isEmpty()) return false;
       const c0 = b0.getCenter(new THREE.Vector3());
       node.scale.setScalar(s / (ps || 1));
       node.updateMatrixWorld(true);
@@ -378,43 +468,335 @@
       node.userData._furnScaled = s;
       node.userData._floorZ = floorTop;
       if (scaledFurniture.indexOf(node) === -1) scaledFurniture.push(node);
+      // Spawn só na primeira vez (sem posição salva): re-escalas posteriores
+      // (SDV resetou transforms) mantêm o grupo fora de scaledThisPass, para
+      // não contaminar a união do spawn com móveis já posicionados. A posição
+      // é mantida pelo bloco de restauração via _wantXY.
+      if (!node.userData._wantXY) scaledThisPass.push(node);
       console.log('[ROOM] movel escalado x' + s + ': ' + (node.name || node.type) +
         ' box=' + Math.round(c0.x) + ',' + Math.round(c0.y));
+      return true;
     }
 
     function processFurnitureNode(node, s, limit, floorTop, inMixedRig) {
-      if (!node || node === roomRoot || node === room) return;
-      if (node.isCamera || node.isLight) return;
+      if (!node || node === roomRoot || node === room) return false;
+      if (node.isCamera || node.isLight) return false;
       if (node.isMesh) {
-        if (inMixedRig || !node.geometry) return;
-        if (modelDiagOf(node) > limit) return;
-        applyFurnitureScale(node, [node], s, floorTop);
-        return;
+        if (inMixedRig || !node.geometry) return false;
+        const fr = meshFilterResult(node, limit, s);
+        if (!fr.kept) {
+          if (window.__DIM_VERBOSE === true) {
+            console.log('[FILTRO] excluida(' + fr.reason + '):',
+              node.name || node.type,
+              '#' + String(node.uuid).slice(0, 8),
+              'diag=' + Math.round(fr.d) + ' diag_cm=' + Math.round(fr.cm));
+          }
+          return false;
+        }
+        return applyFurnitureScale(node, [node], s, floorTop);
       }
       const kids = node.children ? node.children.slice() : [];
-      if (!kids.length) return;
+      if (!kids.length) return false;
       if (!hasCameraOrLight(node)) {
         const meshes = [];
         collectMeshes(node, meshes);
-        const kept = meshes.filter((mesh) => modelDiagOf(mesh) <= limit);
-        if (!kept.length) return;
-        applyFurnitureScale(node, kept, s, floorTop);
-        return;
+        const kept = meshes.filter((mesh) => meshFilterResult(mesh, limit, s).kept);
+        if (!kept.length) return false;
+        return applyFurnitureScale(node, kept, s, floorTop);
       }
-      kids.forEach((k) => processFurnitureNode(k, s, limit, floorTop, true));
+      let any = false;
+      kids.forEach((k) => {
+        if (processFurnitureNode(k, s, limit, floorTop, true)) any = true;
+      });
+      return any;
+    }
+
+    let scaledThisPass = [];
+    // Cache raiz-de-sessao -> cm/unidade, atualizado a cada passe em
+    // ensureFurnitureScaled (que ja resolve sessionTopRoots). Usado pelo
+    // teto absoluto em cm nos pontos de filtro fora do caminho por-sessao.
+    let lastSessionScales = new Map();
+    // Sessões com raiz 3D resolvida (preguiçoso: só após os outputs).
+    function sessionTopRoots() {
+      const out = [];
+      try {
+        const api = window.shapediverAPI;
+        if (api && viewport && typeof api.getSessions === "function") {
+          api.getSessions().forEach((s, i) => {
+            let root = null;
+            let nodePresent = false;
+            let cvKeys = [];
+            try {
+              const node = s.session && s.session.node;
+              nodePresent = !!node;
+              const cv = node && node.convertedObject;
+              if (cv) {
+                try {
+                  cvKeys = Object.keys(cv);
+                } catch (e) {
+                  cvKeys = ["(keys-falhou)"];
+                }
+                root = cv[viewport.id] || null;
+              }
+            } catch (e) {
+              root = null;
+            }
+            if (window.__DIM_VERBOSE === true) {
+              console.log('[ROOT] sessao=' + s.id +
+                ' node=' + (nodePresent ? 'presente' : 'ausente') +
+                ' convertedObject.keys=[' + cvKeys.join(',') + ']' +
+                ' viewport.id=' + viewport.id +
+                ' root_resolvido=' + !!root);
+            }
+            out.push({ index: i, id: s.id, units: s.modelUnits, root: root });
+          });
+        }
+      } catch (e) {}
+      return out;
+    }
+
+    // O top-level contem conteudo de alguma sessao aninhado abaixo dele?
+    // Tops compartilhados pelo SDV nunca sao escalados como unidade: cada
+    // sessao eh processada direto pela propria raiz (ver ensureFurnitureScaled).
+    function topHoldsSessionContent(child, sessions) {
+      if (!child || !child.children || !child.children.length) return false;
+      const stack = child.children.slice();
+      while (stack.length) {
+        const n = stack.pop();
+        for (const s of sessions) {
+          if (s.root && n === s.root) return true;
+        }
+        if (n.children && n.children.length) {
+          for (const k of n.children) stack.push(k);
+        }
+      }
+      return false;
     }
 
     function ensureFurnitureScaled() {
-      const s = FURNITURE_SCALE;
-      if (!(s > 0)) return;
-      const limit = furnitureDiagLimit();
+      if (!(FURNITURE_SCALE > 0)) return;
+      const globalLimit = furnitureDiagLimit();
       const floorTop = roomRoot.position.z + room.position.z;
-      scene.children.slice().forEach((child) => {
-        processFurnitureNode(child, s, limit, floorTop, false);
+      const sessions = sessionTopRoots();
+      lastSessionScales = new Map();
+      sessions.forEach((s) => {
+        if (s.root) lastSessionScales.set(s.root, cmPerUnitForUnits(s.units));
       });
+      const multiSession = sessions.length > 1;
+      const verbose = window.__DIM_VERBOSE === true;
+      function debugWalk(root, label) {
+        if (!root) {
+          console.log('[WALK] ' + label + ' root=null');
+          return;
+        }
+        let c = root;
+        const path = [c.uuid];
+        while (c && c.parent && c.parent !== scene) {
+          c = c.parent;
+          path.push(c.uuid);
+        }
+        console.log('[WALK] ' + label + ' root=' + root.uuid +
+          ' path=' + path.join(' -> ') +
+          ' terminou_em_scene=' + (c && c.parent === scene) +
+          ' final=' + (c ? c.uuid : 'null'));
+      }
+      if (verbose) {
+        sessions.forEach((s) => {
+          debugWalk(s.root, s.id);
+        });
+      }
+      let scaledAny = false;
+      scaledThisPass = [];
+      // Fix por RAIZ DE SESSAO direta: cada sessao eh escalada a partir de
+      // s.root com a propria unidade e o proprio limite. Tops da cena podem
+      // ser compartilhados pelo SDV, entao nunca decidem escala.
+      const coveredTops = new Set();
+      sessions.forEach((s) => {
+        if (!s.root) return;
+        const u = s.units || roomConfig.modelUnits || "in";
+        const sc = scaleForUnit(u);
+        if (!(sc > 0)) return;
+        const lim = limitForRoot(s.root);
+        let c = s.root;
+        while (c && c !== scene) {
+          coveredTops.add(c);
+          c = c.parent;
+        }
+        if (verbose) {
+          console.log('[ROOM] sessao ' + s.id +
+            ' root=' + String(s.root.uuid).slice(0, 8) + ' s=' + sc);
+        }
+        const nBefore = scaledThisPass.length;
+        if (processFurnitureNode(s.root, sc, lim, floorTop, false)) {
+          for (let i = nBefore; i < scaledThisPass.length; i++) {
+            const gg = scaledThisPass[i];
+            gg.userData = gg.userData || {};
+            if (!gg.userData._sessId) gg.userData._sessId = s.id;
+          }
+          console.log('[SCALE] sessao=' + s.id +
+            ' root=' + String(s.root.uuid).slice(0, 8) +
+            ' unit=' + u + ' scale=' + sc);
+          scaledAny = true;
+        }
+      });
+      // Tops restantes (rigs, sombras, grounding): escala global em sessao
+      // unica; em multi-sessao pula — nunca adivinhar escala.
+      scene.children.slice().forEach((child) => {
+        if (child === roomRoot || child === room) return;
+        if (coveredTops.has(child)) return;
+        if (topHoldsSessionContent(child, sessions)) return;
+        if (multiSession) {
+          if (verbose) {
+            console.log('[ROOM] sem dono em multi-sessao, pulando: ' +
+              (child.name || child.type) + ' uuid=' + child.uuid);
+          }
+          return;
+        }
+        let s = FURNITURE_SCALE;
+        let limit = globalLimit;
+        if (sessions.length === 1 && sessions[0].units) {
+          const sc1 = scaleForUnit(sessions[0].units);
+          if (sc1 > 0) {
+            s = sc1;
+            if (sessions[0].root) limit = limitForRoot(sessions[0].root);
+          }
+        }
+        const mBefore = scaledThisPass.length;
+        if (processFurnitureNode(child, s, limit, floorTop, false)) {
+          for (let i = mBefore; i < scaledThisPass.length; i++) {
+            const gg = scaledThisPass[i];
+            gg.userData = gg.userData || {};
+            if (!gg.userData._sessId) {
+              gg.userData._sessId = sessions.length === 1 ? sessions[0].id : '(global)';
+            }
+          }
+          scaledAny = true;
+        }
+      });
+      // Posiciona grupos recém-escalados num ponto livre da sala: sem
+      // sobrepor o que já está posicionado e sem sair das paredes. Só roda
+      // para escala fresca neste passe — arranjo do usuário nunca é puxado.
+      // Primeira candidata: ficar onde nasceu (dx=0); depois, espiral.
+      if (scaledAny && scaledThisPass.length) {
+        const cfg = (window.SD_CONFIG && window.SD_CONFIG.room) || {};
+        const wall =
+          (cfg.wallThicknessM || 0.15) * (cfg.unitsPerMeter || 100);
+        const GAP = 20;
+        const baseX = roomRoot.position.x + room.position.x;
+        const baseY = roomRoot.position.y + room.position.y;
+        const occ = [];
+        scaledFurniture.forEach((g) => {
+          if (!g.parent || scaledThisPass.indexOf(g) !== -1) return;
+          const ob = new THREE.Box3().setFromObject(g);
+          if (!ob.isEmpty()) occ.push(ob);
+        });
+        const fresh = scaledThisPass.filter((g) => g.parent);
+        if (fresh.length) {
+          const ub = new THREE.Box3();
+          fresh.forEach((g) => {
+            const gb = new THREE.Box3().setFromObject(g);
+            console.log('[SPAWN] fresh grupo=' + (g.name || g.type) +
+              ' #' + String(g.uuid).slice(0, 8) +
+              ' sessao=' + ((g.userData && g.userData._sessId) || '?') +
+              ' box=[' + Math.round(gb.min.x) + ',' + Math.round(gb.min.y) + ',' + Math.round(gb.min.z) +
+              ']..[' + Math.round(gb.max.x) + ',' + Math.round(gb.max.y) + ',' + Math.round(gb.max.z) + ']');
+            ub.union(gb);
+          });
+          if (!ub.isEmpty()) {
+            const uc = ub.getCenter(new THREE.Vector3());
+            const hw = (ub.max.x - ub.min.x) / 2;
+            const hd = (ub.max.y - ub.min.y) / 2;
+            const minCX = -ROOM_LIMIT.x + wall + hw;
+            const maxCX = ROOM_LIMIT.x - wall - hw;
+            const minCY = -ROOM_LIMIT.y + wall + hd;
+            const maxCY = ROOM_LIMIT.y - wall - hd;
+            console.log('[SPAWN] uniao uc=' + Math.round(uc.x) + ',' + Math.round(uc.y) + ',' + Math.round(uc.z) +
+              ' hw=' + Math.round(hw) + ' hd=' + Math.round(hd) +
+              ' salaX=[' + Math.round(-ROOM_LIMIT.x) + ',' + Math.round(ROOM_LIMIT.x) + ']' +
+              ' salaY=[' + Math.round(-ROOM_LIMIT.y) + ',' + Math.round(ROOM_LIMIT.y) + ']' +
+              ' wall=' + Math.round(wall) +
+              ' cxRange=[' + Math.round(minCX) + ',' + Math.round(maxCX) + ']' +
+              ' cyRange=[' + Math.round(minCY) + ',' + Math.round(maxCY) + ']' +
+              ' base=' + Math.round(baseX) + ',' + Math.round(baseY) +
+              ' occ=' + occ.length);
+            const fits = (cx, cy) =>
+              cx >= minCX && cx <= maxCX && cy >= minCY && cy <= maxCY;
+            const clearOf = (cx, cy) => {
+              for (const o of occ) {
+                if (
+                  cx + hw > o.min.x - GAP &&
+                  cx - hw < o.max.x + GAP &&
+                  cy + hd > o.min.y - GAP &&
+                  cy - hd < o.max.y + GAP
+                ) {
+                  return false;
+                }
+              }
+              return true;
+            };
+            let spot = null;
+            let spotHow = 'ranges-invalidos';
+            if (minCX <= maxCX && minCY <= maxCY) {
+              const step = Math.max(hw * 2, hd * 2, 150);
+              outer: for (let ring = 0; ring <= 8; ring++) {
+                for (let k = 0; k < 8; k++) {
+                  const a = (k / 8) * Math.PI * 2 + ring * 0.4;
+                  const cx =
+                    ring === 0 ? uc.x : baseX + Math.cos(a) * ring * step;
+                  const cy =
+                    ring === 0 ? uc.y : baseY + Math.sin(a) * ring * step;
+                  if (fits(cx, cy) && clearOf(cx, cy)) {
+                    spot = { x: cx, y: cy };
+                    spotHow = 'ring=' + ring + ' k=' + k;
+                    break outer;
+                  }
+                }
+              }
+              if (!spot) spotHow = 'espiral-esgotada';
+            }
+            if (!spot) {
+              spot = { x: baseX, y: baseY };
+              spotHow = 'fallback-centro';
+            }
+            console.log('[SPAWN] resultado spot=' + Math.round(spot.x) + ',' + Math.round(spot.y) +
+              ' (' + spotHow + ') dx=' + Math.round(spot.x - uc.x) + ' dy=' + Math.round(spot.y - uc.y));
+            const dx = spot.x - uc.x;
+            const dy = spot.y - uc.y;
+            // Sela a posição mesmo sem deslocamento (dx=dy=0): sem isso o
+            // grupo passaria no spawn de novo numa eventual re-escala.
+            fresh.forEach((g) => {
+              g.userData = g.userData || {};
+              if (!g.userData._wantXY) g.userData._wantXY = [g.position.x, g.position.y];
+            });
+            if (dx || dy) {
+              fresh.forEach((g) => {
+                g.position.x += dx;
+                g.position.y += dy;
+                g.updateMatrixWorld(true);
+                g.userData = g.userData || {};
+                g.userData._wantXY = [g.position.x, g.position.y];
+              });
+              console.log('[ROOM] movel posicionado: dx=' +
+                Math.round(dx) + ' dy=' + Math.round(dy));
+            }
+            // Ocupa o ponto para o próximo grupo fresco deste mesmo passe.
+            occ.push(
+              new THREE.Box3(
+                new THREE.Vector3(spot.x - hw, spot.y - hd, ub.min.z),
+                new THREE.Vector3(spot.x + hw, spot.y + hd, ub.max.z)
+              )
+            );
+          }
+        }
+      }
       for (let i = scaledFurniture.length - 1; i >= 0; i--) {
         const g = scaledFurniture[i];
         if (!g.parent) {
+          console.log('[EVICT] removido sem parent: ' + (g.name || g.type) +
+            ' #' + String(g.uuid).slice(0, 8) +
+            ' sessao=' + ((g.userData && g.userData._sessId) || '?') +
+            ' escala=' + ((g.userData && g.userData._furnScaled) || '?') +
+            ' wantXY=' + ((g.userData && g.userData._wantXY) ? g.userData._wantXY.map(Math.round).join(',') : '-'));
           scaledFurniture.splice(i, 1);
           continue;
         }
@@ -670,20 +1052,26 @@
         " | gap: " +
         (box.min.z - roomRoot.position.z).toFixed(0) +
         " | lim: " +
-        Math.round(limit) +
+        Math.round(limit && limit.p90 !== undefined ? limit.p90 : limit) +
         " | paredes: " +
         wallsState;
     }
 
-    function hideScenery(limit) {
+    function hideSceneryIn(obj, limit, cmPerUnit) {
       if (roomConfig.hideScenery === false) {
         return;
       }
       const meshes = [];
-      collectMeshes(scene, meshes);
+      collectMeshes(obj, meshes);
+      const cpu = cmPerUnit > 0 ? cmPerUnit :
+        (FURNITURE_SCALE > 0 ? FURNITURE_SCALE : 1);
       meshes.forEach((mesh) => {
-        mesh.visible = modelDiagOf(mesh) <= limit;
+        mesh.visible = meshFilterResult(mesh, limit, cpu).kept;
       });
+    }
+
+    function hideScenery(limit) {
+      hideSceneryIn(scene, limit);
     }
 
     function updateFurnitureCenter(now) {
@@ -696,18 +1084,55 @@
       }
       lastCenterUpdate = now;
       ensureFurnitureScaled();
-      const box = computeFurnitureBox();
+      const box = computeFurnitureBox(selectedFurnitureRoots());
       if (!box) {
         rebuildDimensions(null);
         return;
       }
       rebuildDimensions(box);
-      const limit = furnitureDiagLimit();
-      hideScenery(limit);
+      // Esconde cenário por sessão (limite próprio): um modelo gigante não
+      // revela o piso do outro. O resto (sem dono) usa o limite global.
+      (function hidePerSession() {
+        if (roomConfig.hideScenery === false) {
+          return;
+        }
+        const claimed = new Set();
+        try {
+          const api = window.shapediverAPI;
+          const vp = viewport;
+          if (api && vp && typeof api.getSessions === "function") {
+            api.getSessions().forEach((s) => {
+              let root = null;
+              try {
+                const node = s.session && s.session.node;
+                const cv = node && node.convertedObject;
+                if (cv) root = cv[vp.id] || null;
+              } catch (e) {
+                root = null;
+              }
+              if (!root || !root.parent) return;
+              let top = root;
+              while (top.parent && top.parent !== scene) top = top.parent;
+              if (top.parent === scene) claimed.add(top);
+              hideSceneryIn(root, limitForRoot(root), cmPerUnitForUnits(s.modelUnits));
+            });
+          }
+        } catch (e) {}
+        const strayMeshes = [];
+        scene.children.slice().forEach((child) => {
+          if (child === roomRoot || child === room || claimed.has(child)) return;
+          collectMeshes(child, strayMeshes);
+        });
+        const strayLimit = limitForMeshes(strayMeshes);
+        scene.children.slice().forEach((child) => {
+          if (child === roomRoot || child === room || claimed.has(child)) return;
+          hideSceneryIn(child, strayLimit);
+        });
+      })();
       box.getCenter(center);
       floorTarget.copy(center);
       floorTarget.z = roomRoot.position.z + 1;
-      updateDebug(box, limit);
+      updateDebug(box, furnitureDiagLimit());
     }
 
     function vec3Of(obj, out) {
@@ -722,7 +1147,11 @@
     }
 
     function update() {
-      updateFurnitureCenter(performance.now());
+      try {
+        updateFurnitureCenter(performance.now());
+      } catch (err) {
+        console.error("room.js update:", err);
+      }
       updateDimLabels();
       vec3Of(
         camera.position ||
@@ -767,6 +1196,50 @@
 
       requestAnimationFrame(update);
     }
+
+    // Enquadra a câmera na sala uma vez (mantém o ângulo atual, ajusta
+    // distância e alvo). Pula se o usuário já mexeu. Reenquadra manual:
+    // window.frameRoomCamera().
+    let roomFramed = false;
+    let userInteracted = false;
+    const frameCanvas =
+      document.getElementById(
+        (window.SD_CONFIG && window.SD_CONFIG.canvasId) || "canvas"
+      ) || document.getElementById("canvas");
+    function markInteracted() {
+      userInteracted = true;
+    }
+    if (frameCanvas) {
+      frameCanvas.addEventListener("pointerdown", markInteracted, { once: true });
+      frameCanvas.addEventListener("wheel", markInteracted, { once: true });
+    }
+    function frameRoomCamera() {
+      if (roomFramed || userInteracted) return;
+      roomFramed = true;
+      const cam = viewport.camera;
+      if (!cam) return;
+      // Direção fixa de dollhouse (frente + acima), não a pose padrão do SDV.
+      let dx = 0;
+      let dy = -0.85;
+      let dz = 0.53;
+      const dl = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      dx /= dl;
+      dy /= dl;
+      dz /= dl;
+      const cx = roomRoot.position.x + room.position.x;
+      const cy = roomRoot.position.y + room.position.y;
+      const cz = roomRoot.position.z + room.position.z + HEIGHT * 0.35;
+      const dist = Math.max(WIDTH, DEPTH) * 1.2;
+      cam.target = [cx, cy, cz];
+      cam.position = [cx + dx * dist, cy + dy * dist, cz + dz * dist];
+      console.log("[ROOM] camera enquadrada na sala, dist=" + Math.round(dist));
+    }
+    window.frameRoomCamera = function () {
+      userInteracted = false;
+      roomFramed = false;
+      frameRoomCamera();
+    };
+    frameRoomCamera();
 
     requestAnimationFrame(update);
   }

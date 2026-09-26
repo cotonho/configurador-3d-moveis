@@ -14,14 +14,19 @@
   <main class="layout">
     <aside id="side-panel" class="panel">
       <h2 id="side-panel-title">Atributos do movel</h2>
-      <div class="toolbar">
-        <button id="move-toggle" type="button" title="Arrastar move o móvel no piso">Mover móvel</button>
-        <button id="rotate-toggle" type="button" title="Girar o móvel no lugar">Rotacionar</button>
-      </div>
-      <div id="rotate-panel" style="display:none;">
-        <label class="control-label" for="rotate-slider">Rotação</label>
-        <input id="rotate-slider" class="control-slider" type="range" min="-180" max="180" step="1" value="0">
-        <span id="rotate-value" class="control-value">0°</span>
+      <div id="float-actions">
+        <div id="rotate-panel" style="display:none;">
+          <label class="control-label" for="rotate-slider">Rotação <span id="rotate-value" class="control-value">0°</span></label>
+          <input id="rotate-slider" class="control-slider" type="range" min="-180" max="180" step="1" value="0">
+        </div>
+        <button id="move-toggle" class="fab" type="button" title="Mover móvel" aria-label="Mover móvel">
+          <img src="assets/icons/move.svg" alt="" onerror="this.remove()">
+          <span aria-hidden="true">⤢</span>
+        </button>
+        <button id="rotate-toggle" class="fab" type="button" title="Rotacionar" aria-label="Rotacionar">
+          <img src="assets/icons/rotate.svg" alt="" onerror="this.remove()">
+          <span aria-hidden="true">⟳</span>
+        </button>
       </div>
       <div class="price-box">
         <span>Preco estimado:</span>
@@ -29,6 +34,11 @@
       </div>
       <div id="side-panel-body"></div>
       <ul id="warnings" class="warnings"></ul>
+      <div id="add-model">
+        <h2>Adicionar móvel</h2>
+        <div id="catalog-list"></div>
+        <div id="add-model-status" class="control-hint"></div>
+      </div>
     </aside>
     <section class="viewer-wrap">
       <div id="canvas-container">
@@ -51,5 +61,6 @@
   <script src="js/menu.js"></script>
   <script src="js/furniture-move.js"></script>
   <script src="js/furniture-rotate.js"></script>
+  <script src="js/furniture-add.js"></script>
 </body>
 </html>
