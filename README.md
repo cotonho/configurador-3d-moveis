@@ -22,6 +22,8 @@ python -m http.server 8080
 
 Depois abra `http://localhost:8080`.
 
+> Durante o desenvolvimento, abra o DevTools (F12) → aba Network → marque **Disable cache** e deixe o DevTools aberto. Sem isso o navegador segura `js/` antigo e os testes rodam código velho sem nenhum aviso visível.
+
 > O ShapeDiver recomenda `localhost`/HTTPS — o ticket de exemplo só responde em `localhost:8080`.
 > O `config.js` local (com ticket real) **não é versionado** — nunca o envie para o repositório. Quem clonar o projeto deve copiar o `config.example.js` e preencher o próprio ticket.
 
@@ -51,6 +53,30 @@ js/vendor/            (não versionado) bundles locais para redes sem CDN
 | `room.furnitureOffset` | Posição inicial do móvel: `[x, y]` (largura, profundidade) |
 | `room.hideScenery` | Oculta decoração do modelo (pôster/fundos) |
 | `room.debug` | Exibe na tela a medição chão × pés do móvel |
+
+## Controles genéricos (contrato com o modelo)
+
+A sidebar monta os controles **a partir dos metadados do próprio modelo** — nenhum móvel precisa de configuração individual. Para um modelo novo se comportar bem, ele precisa expor:
+
+| Metadado | Efeito | Se ausente |
+| --- | --- | --- |
+| `param.order` (número) | Ordem dos controles na sidebar | Mantém a ordem de chegada do modelo |
+| `param.group.name` | Cabeçalho de seção agrupando controles | Controles aparecem sem cabeçalho |
+| `param.choices` | Lista de opções | Numérico vira slider; texto sem opções **não renderiza** (ver limitação) |
+| `modelUnits` (`mm`/`cm`/`m`/`in`/`ft`, no catálogo ou `room.modelUnits`) | Conversão automática p/ cm da sala | Assume a unidade global da sala |
+
+Regras de renderização (iguais para todo móvel):
+
+- Escolhas de cor → botões swatch; demais escolhas → dropdown.
+- Numéricos → slider (inteiro detectado sondando `isValid`, sem depender do tipo declarado).
+- Booleanos → checkbox; `file` e grupos `export`/`email` → ocultos.
+
+**Limitações conhecidas:**
+
+1. **Envio de escolhas espelha o formato atual.** Alguns `StringList` guardam o índice (`"0"`) em vez do texto (`"Shelves"`). O código detecta isso pelo valor atual do parâmetro e envia no mesmo formato **e tipo** (string `"1"` ou número `1`). Se um modelo futuro guardar as opções num terceiro formato, o `setParameter` será rejeitado com `isValid ... is not of type ...` no console — ver `choiceSendValue` em `js/main.js`.
+2. **Parâmetro `String` sem opções nem min/max não gera controle.** Ex.: caminho de textura avulso. Seria necessário um campo de texto (`buildText`, ainda não implementado).
+3. **Diagnóstico:** com `window.__DIM_VERBOSE = true` no console, os logs `[SCALE]/[SPAWN]/[EVICT]/[FILTRO]/[DIM-MESH]` mostram escala, spawn, expurgo, filtro de peças e composição das cotas. Em uso normal o console fica limpo (só erros).
+
 
 ## Tecnologias
 
