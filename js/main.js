@@ -1,3 +1,4 @@
+console.log("main.js carregado - v3-multisession");
 (function () {
   const config = window.SD_CONFIG;
   const overlay = document.getElementById("overlay");
@@ -55,12 +56,23 @@
     return hex;
   }
 
-  function currentValues() {
+  function currentValues(sessionId) {
     const values = {};
-    window.shapediverAPI.getParameters().forEach((p) => {
+    window.shapediverAPI.getParameters(sessionId).forEach((p) => {
       values[p.name] = p.value;
     });
     return values;
+  }
+
+  function ownerSessionOf(param) {
+    const api = window.shapediverAPI;
+    if (typeof api.getSessions !== "function") {
+      return null;
+    }
+    const found = api.getSessions().find((s) =>
+      api.getParameters(s.id).some((p) => p === param)
+    );
+    return found ? found.id : null;
   }
 
   function renderWarnings(messages) {
@@ -80,16 +92,33 @@
     );
   }
 
+  // Soma o preço de todas as sessões (base por móvel + dimensões).
+  function totalPrice() {
+    const api = window.shapediverAPI;
+    if (typeof api.getSessions !== "function") {
+      return window.pricing.calculate(currentValues(), config);
+    }
+    return api.getSessions().reduce(
+      (sum, s) => sum + window.pricing.calculate(currentValues(s.id), config),
+      0
+    );
+  }
+
   function applyConstraintsAndSend(param, proposedValue) {
-    const next = currentValues();
+    if (typeof proposedValue === "number" && isNaN(proposedValue)) {
+      console.error("main.js: valor NaN bloqueado para o parametro", param.name);
+      return param.value;
+    }
+    const sessionId = ownerSessionOf(param);
+    const next = currentValues(sessionId);
     next[param.name] = proposedValue;
 
     const result = window.constraints.apply(next);
     const finalValue = result.values[param.name];
 
     renderWarnings(result.errors);
-    renderPrice(result.values);
-    window.shapediverAPI.setParameter(param, finalValue);
+    priceEl.textContent = window.pricing.format(totalPrice(), config.currency);
+    window.shapediverAPI.setParameter(param, finalValue, sessionId);
 
     return finalValue;
   }
@@ -105,7 +134,9 @@
   function syncRow(row, param) {
     if (row._slider) {
       row._slider.value = param.value;
-      row._valueOut.textContent = Number(param.value).toFixed(2);
+      row._valueOut.textContent = Number(param.value).toFixed(
+        row._dec !== undefined ? row._dec : 2
+      );
     }
     if (row._check) {
       row._check.checked = Boolean(param.value);
@@ -128,12 +159,26 @@
     registry.forEach((param, row) => syncRow(row, param));
   }
 
+  // Detecta parâmetro inteiro sondando o validador (sem depender de strings
+  // de tipo): rejeita x.5 mas aceita o arredondado => inteiro.
+  function isIntParam(param) {
+    try {
+      if (!param || typeof param.isValid !== "function") return false;
+      const base = typeof param.min === "number" ? param.min : 0;
+      const probe = base + 0.5;
+      return !param.isValid(probe, false) && !!param.isValid(Math.round(probe), false);
+    } catch (e) {
+      return false;
+    }
+  }
+
   function buildSlider(param) {
     const min = Number(param.min);
     const max = Number(param.max);
     if (isNaN(min) || isNaN(max)) {
       return null;
     }
+    const dec = isIntParam(param) ? 0 : 2;
 
     const label = document.createElement("label");
     label.className = "control-label";
@@ -141,14 +186,14 @@
 
     const valueOut = document.createElement("span");
     valueOut.className = "control-value";
-    valueOut.textContent = Number(param.value).toFixed(2);
+    valueOut.textContent = Number(param.value).toFixed(dec);
 
     const slider = document.createElement("input");
     slider.type = "range";
     slider.min = min;
     slider.max = max;
     slider.value = param.value;
-    slider.step = "any";
+    slider.step = dec === 0 ? "1" : "any";
     slider.className = "control-slider";
 
     const row = document.createElement("div");
@@ -156,6 +201,7 @@
     row.append(label, valueOut, slider);
     row._slider = slider;
     row._valueOut = valueOut;
+    row._dec = dec;
     registerRow(row, param);
 
     slider.addEventListener("input", () => {
@@ -327,11 +373,30 @@
   };
 
   function refresh() {
-    const { values, errors } = window.constraints.apply(currentValues());
-    renderWarnings(errors);
-    renderPrice(values);
+    const api = window.shapediverAPI;
+    const sessions =
+      typeof api.getSessions === "function" && api.getSessions().length
+        ? api.getSessions()
+        : [{ id: null }];
+    const allErrors = [];
+    sessions.forEach((s) => {
+      const { errors } = window.constraints.apply(currentValues(s.id));
+      errors.forEach((e) => allErrors.push(e));
+    });
+    renderWarnings(allErrors);
+    priceEl.textContent = window.pricing.format(totalPrice(), config.currency);
     syncAll();
   }
+
+  window.addEventListener("sdv-customize-failed", (event) => {
+    const detail = (event && event.detail) || {};
+    renderWarnings([
+      "Falha ao atualizar " +
+        (detail.sessionId || "o modelo") +
+        ": " +
+        (detail.message || "erro desconhecido")
+    ]);
+  });
 
   async function init() {
     overlay.classList.add("visible");
