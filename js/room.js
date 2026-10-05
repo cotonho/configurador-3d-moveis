@@ -369,7 +369,7 @@
         if (verbose) {
           console.log('[DIM-MESH] grupos em _furnitureGroups: ' +
             scaledFurniture.map((g) => (g.name || g.type) + '#' + String(g.uuid).slice(0, 8)).join(' | '));
-          console.log('[DIM-MESH] limite=' + Math.round(limit) + ' totalMeshes=' + meshes.length);
+          console.log('[DIM-MESH] limite p90=' + Math.round(limit.p90) + ' teto_cm=' + limit.absCm + ' totalMeshes=' + meshes.length);
         }
         const box = new THREE.Box3();
         let used = 0;
@@ -473,7 +473,7 @@
       // não contaminar a união do spawn com móveis já posicionados. A posição
       // é mantida pelo bloco de restauração via _wantXY.
       if (!node.userData._wantXY) scaledThisPass.push(node);
-      console.log('[ROOM] movel escalado x' + s + ': ' + (node.name || node.type) +
+      diagLog('[ROOM] movel escalado x' + s + ': ' + (node.name || node.type) +
         ' box=' + Math.round(c0.x) + ',' + Math.round(c0.y));
       return true;
     }
@@ -516,6 +516,15 @@
     // ensureFurnitureScaled (que ja resolve sessionTopRoots). Usado pelo
     // teto absoluto em cm nos pontos de filtro fora do caminho por-sessao.
     let lastSessionScales = new Map();
+
+    // Log de diagnóstico: só aparece com window.__DIM_VERBOSE = true.
+    // Os logs de instrumentação da fase multi-sessão usam este helper para
+    // não poluir o console em uso normal.
+    function diagLog() {
+      if (window.__DIM_VERBOSE === true) {
+        console.log.apply(console, arguments);
+      }
+    }
     // Sessões com raiz 3D resolvida (preguiçoso: só após os outputs).
     function sessionTopRoots() {
       const out = [];
@@ -633,7 +642,7 @@
             gg.userData = gg.userData || {};
             if (!gg.userData._sessId) gg.userData._sessId = s.id;
           }
-          console.log('[SCALE] sessao=' + s.id +
+          diagLog('[SCALE] sessao=' + s.id +
             ' root=' + String(s.root.uuid).slice(0, 8) +
             ' unit=' + u + ' scale=' + sc);
           scaledAny = true;
@@ -695,7 +704,7 @@
           const ub = new THREE.Box3();
           fresh.forEach((g) => {
             const gb = new THREE.Box3().setFromObject(g);
-            console.log('[SPAWN] fresh grupo=' + (g.name || g.type) +
+            diagLog('[SPAWN] fresh grupo=' + (g.name || g.type) +
               ' #' + String(g.uuid).slice(0, 8) +
               ' sessao=' + ((g.userData && g.userData._sessId) || '?') +
               ' box=[' + Math.round(gb.min.x) + ',' + Math.round(gb.min.y) + ',' + Math.round(gb.min.z) +
@@ -710,7 +719,7 @@
             const maxCX = ROOM_LIMIT.x - wall - hw;
             const minCY = -ROOM_LIMIT.y + wall + hd;
             const maxCY = ROOM_LIMIT.y - wall - hd;
-            console.log('[SPAWN] uniao uc=' + Math.round(uc.x) + ',' + Math.round(uc.y) + ',' + Math.round(uc.z) +
+            diagLog('[SPAWN] uniao uc=' + Math.round(uc.x) + ',' + Math.round(uc.y) + ',' + Math.round(uc.z) +
               ' hw=' + Math.round(hw) + ' hd=' + Math.round(hd) +
               ' salaX=[' + Math.round(-ROOM_LIMIT.x) + ',' + Math.round(ROOM_LIMIT.x) + ']' +
               ' salaY=[' + Math.round(-ROOM_LIMIT.y) + ',' + Math.round(ROOM_LIMIT.y) + ']' +
@@ -758,7 +767,7 @@
               spot = { x: baseX, y: baseY };
               spotHow = 'fallback-centro';
             }
-            console.log('[SPAWN] resultado spot=' + Math.round(spot.x) + ',' + Math.round(spot.y) +
+            diagLog('[SPAWN] resultado spot=' + Math.round(spot.x) + ',' + Math.round(spot.y) +
               ' (' + spotHow + ') dx=' + Math.round(spot.x - uc.x) + ' dy=' + Math.round(spot.y - uc.y));
             const dx = spot.x - uc.x;
             const dy = spot.y - uc.y;
@@ -776,7 +785,7 @@
                 g.userData = g.userData || {};
                 g.userData._wantXY = [g.position.x, g.position.y];
               });
-              console.log('[ROOM] movel posicionado: dx=' +
+              diagLog('[ROOM] movel posicionado: dx=' +
                 Math.round(dx) + ' dy=' + Math.round(dy));
             }
             // Ocupa o ponto para o próximo grupo fresco deste mesmo passe.
@@ -792,7 +801,7 @@
       for (let i = scaledFurniture.length - 1; i >= 0; i--) {
         const g = scaledFurniture[i];
         if (!g.parent) {
-          console.log('[EVICT] removido sem parent: ' + (g.name || g.type) +
+          diagLog('[EVICT] removido sem parent: ' + (g.name || g.type) +
             ' #' + String(g.uuid).slice(0, 8) +
             ' sessao=' + ((g.userData && g.userData._sessId) || '?') +
             ' escala=' + ((g.userData && g.userData._furnScaled) || '?') +
@@ -871,11 +880,11 @@
       if (!dimsOn) return;
       const yaw = furnitureYaw();
       if (box) {
-        console.log('[DIM] box cru min=[' + Math.round(box.min.x) + ',' + Math.round(box.min.y) + ',' + Math.round(box.min.z) +
+        diagLog('[DIM] box cru min=[' + Math.round(box.min.x) + ',' + Math.round(box.min.y) + ',' + Math.round(box.min.z) +
           '] max=[' + Math.round(box.max.x) + ',' + Math.round(box.max.y) + ',' + Math.round(box.max.z) +
           '] yawDeg=' + Math.round((yaw * 180) / Math.PI));
       } else {
-        console.log('[DIM] box cru = null');
+        diagLog('[DIM] box cru = null');
       }
       const key = box
         ? [
@@ -1232,7 +1241,7 @@
       const dist = Math.max(WIDTH, DEPTH) * 1.2;
       cam.target = [cx, cy, cz];
       cam.position = [cx + dx * dist, cy + dy * dist, cz + dz * dist];
-      console.log("[ROOM] camera enquadrada na sala, dist=" + Math.round(dist));
+      diagLog("[ROOM] camera enquadrada na sala, dist=" + Math.round(dist));
     }
     window.frameRoomCamera = function () {
       userInteracted = false;
