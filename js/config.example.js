@@ -28,6 +28,7 @@ window.SD_CONFIG = {
       "Obj Export Object Names",
       "Email Export Format"
     ]
+    // collision: false, // desliga a colisão entre móveis no arrasto (padrão: ligada)
   },
 room: {
     enabled: true,

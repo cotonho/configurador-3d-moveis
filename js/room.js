@@ -292,6 +292,9 @@
       return box;
     }
 
+    // Box filtrada p/ colisão no arrasto (mesmo critério do spawn/cotas).
+    window.furnitureCollisionBox = filteredBoxFor;
+
     // cm por unidade do modelo de uma sessao (p/ converter o diag estimado).
     function cmPerUnitForUnits(units) {
       const sc = scaleForUnit(units || roomConfig.modelUnits || "in");

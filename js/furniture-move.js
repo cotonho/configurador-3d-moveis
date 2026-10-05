@@ -191,11 +191,84 @@
         my *= MAXD / mlen;
       }
       if (!mx && !my) return;
+      // Colisão entre móveis (AABB em XY, mesmo critério de box do spawn):
+      // tenta o movimento cheio, depois só-X, depois só-Y; fica com o
+      // primeiro sem sobreposição, senão fica parado. Desliga com
+      // controls.collision === false. Paredes continuam valendo (clampToRoom).
+      const controlsCfg = (window.SD_CONFIG && window.SD_CONFIG.controls) || {};
+      const collideOn = controlsCfg.collision !== false;
+      function groupBox(g) {
+        if (typeof window.furnitureCollisionBox === "function") {
+          try {
+            return window.furnitureCollisionBox(g);
+          } catch (e) {}
+        }
+        return new THREE.Box3().setFromObject(g);
+      }
+      function hitsOthers() {
+        const known = window._furnitureGroups || [];
+        const mine = [];
+        d.roots.forEach((g) => {
+          try {
+            mine.push(groupBox(g));
+          } catch (e) {}
+        });
+        for (const o of known) {
+          if (!o || !o.parent) continue;
+          if (d.roots.indexOf(o) !== -1) continue;
+          let ob = null;
+          try {
+            ob = groupBox(o);
+          } catch (e) {
+            continue;
+          }
+          if (!ob || ob.isEmpty()) continue;
+          for (const m of mine) {
+            if (m.isEmpty()) continue;
+            if (
+              m.min.x < ob.max.x && m.max.x > ob.min.x &&
+              m.min.y < ob.max.y && m.max.y > ob.min.y
+            ) {
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+      const starts = d.roots.map((g) => [g.position.x, g.position.y]);
+      function applyMove(dx, dy) {
+        d.roots.forEach((g) => {
+          g.position.x += dx;
+          g.position.y += dy;
+          g.updateMatrixWorld(true);
+          clampToRoom(g);
+        });
+      }
+      function restore() {
+        d.roots.forEach((g, i) => {
+          g.position.x = starts[i][0];
+          g.position.y = starts[i][1];
+          g.updateMatrixWorld(true);
+        });
+      }
+      let moved = false;
+      if (!collideOn) {
+        applyMove(mx, my);
+        moved = true;
+      } else {
+        const opts = [[mx, my], [mx, 0], [0, my]];
+        for (const [dx, dy] of opts) {
+          if (!dx && !dy) continue;
+          applyMove(dx, dy);
+          if (!hitsOthers()) {
+            moved = true;
+            break;
+          }
+          restore();
+        }
+      }
+      if (!moved) return;
       d.roots.forEach((g) => {
-        g.position.x += mx;
-        g.position.y += my;
-        g.updateMatrixWorld(true);
-        clampToRoom(g);
         g.userData = g.userData || {};
         g.userData._wantXY = [g.position.x, g.position.y];
       });
