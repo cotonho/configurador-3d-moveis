@@ -550,6 +550,11 @@
     // teto absoluto em cm nos pontos de filtro fora do caminho por-sessao.
     let lastSessionScales = new Map();
 
+    // Última posição desejada por ID de sessão. Sobrevive à troca de
+    // identidade dos objetos 3D (rebuild após customize): o objeto novo
+    // volta ao ponto antigo em vez de cair no spawn de novo.
+    const lastKnownXYBySession = new Map();
+
     // Log de diagnóstico: só aparece com window.__DIM_VERBOSE = true.
     // Os logs de instrumentação da fase multi-sessão usam este helper para
     // não poluir o console em uso normal.
@@ -776,9 +781,20 @@
               }
               return true;
             };
+            // Ponto antigo por sessão (sobrevive a rebuild): se todo o fresh é
+            // de uma sessão com posição lembrada, tenta ela antes da espiral.
+            let remembered = null;
+            const freshSess = fresh.length ? ((fresh[0].userData && fresh[0].userData._sessId) || null) : null;
+            if (freshSess && fresh.every((g) => g.userData && g.userData._sessId === freshSess)) {
+              remembered = lastKnownXYBySession.get(freshSess) || null;
+            }
             let spot = null;
             let spotHow = 'ranges-invalidos';
-            if (minCX <= maxCX && minCY <= maxCY) {
+            if (remembered && fits(remembered[0], remembered[1]) && clearOf(remembered[0], remembered[1])) {
+              spot = { x: remembered[0], y: remembered[1] };
+              spotHow = 'memoria-sessao';
+            }
+            if (!spot && minCX <= maxCX && minCY <= maxCY) {
               const step = Math.max(hw * 2, hd * 2, 150);
               outer: for (let ring = 0; ring <= 8; ring++) {
                 for (let k = 0; k < 8; k++) {
@@ -839,6 +855,10 @@
             ' sessao=' + ((g.userData && g.userData._sessId) || '?') +
             ' escala=' + ((g.userData && g.userData._furnScaled) || '?') +
             ' wantXY=' + ((g.userData && g.userData._wantXY) ? g.userData._wantXY.map(Math.round).join(',') : '-'));
+          // Guarda o ponto antigo pela sessão antes de descartar o objeto.
+          const evSess = g.userData && g.userData._sessId;
+          const evWant = g.userData && g.userData._wantXY;
+          if (evSess && evWant) lastKnownXYBySession.set(evSess, [evWant[0], evWant[1]]);
           scaledFurniture.splice(i, 1);
           continue;
         }
@@ -857,6 +877,11 @@
             g.updateMatrixWorld(true);
           }
         }
+        // Memória por sessão: sincroniza a posição desejada a cada passe
+        // (cobre spawn, arrasto manual e slider, sem mexer nesses arquivos).
+        const memSess = g.userData._sessId;
+        const memWant = g.userData._wantXY;
+        if (memSess && memWant) lastKnownXYBySession.set(memSess, [memWant[0], memWant[1]]);
       }
     }
 
