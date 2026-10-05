@@ -32,11 +32,12 @@ window.SD_CONFIG = {
     // viram botões swatch; todo o resto vira slider, dropdown, checkbox etc.
     // Ordem e agrupamento vêm de param.order / param.group.name do modelo.
     // Seções colapsáveis (genérico): estado inicial por nome exato da seção.
-    // defaultCollapsed: como todas começam; collapsed/expanded: exceções.
+    // Padrão: todas começam guardadas; defaultCollapsed: false abre tudo.
+    // collapsed/expanded: exceções por seção.
     // groups: {
-    //   defaultCollapsed: false,
+    //   defaultCollapsed: true,
     //   collapsed: ["BAY FEATURE"],
-    //   expanded: []
+    //   expanded: ["PARAMETERS"]
     // }
   },
 room: {

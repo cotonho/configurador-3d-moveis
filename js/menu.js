@@ -22,7 +22,8 @@
     if (Array.isArray(gc.expanded) && gc.expanded.indexOf(name) !== -1) {
       return false;
     }
-    return !!gc.defaultCollapsed;
+    // Padrão: guardado. Só abre por padrão com defaultCollapsed: false.
+    return gc.defaultCollapsed !== false;
   }
 
   function loadTHREE(callback) {
