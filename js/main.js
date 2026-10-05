@@ -297,8 +297,9 @@ console.log("main.js carregado - v3-multisession");
   // mesma fonte de dados dos botões, com a mesma resolução de valor atual.
   // Alguns StringList guardam o ÍNDICE ("0") em vez do texto da opção.
   // Detecta pelo valor atual: se ele não bate com nenhum texto de opção
-  // mas é numérico, envia o índice; senão envia o valor cru. Genérico para
-  // qualquer móvel, sem configuração individual.
+  // mas é numérico, envia o índice no MESMO TIPO do valor atual (string
+  // "1" ou número 1); senão envia o valor cru. Genérico para qualquer
+  // móvel, sem configuração individual.
   function choiceSendValue(param, choice, index) {
     const v = choiceValue(choice);
     try {
@@ -310,7 +311,7 @@ console.log("main.js carregado - v3-multisession");
         Number.isInteger(index) &&
         index >= 0
       ) {
-        return index;
+        return typeof param.value === "number" ? index : String(index);
       }
     } catch (e) {}
     return v;
