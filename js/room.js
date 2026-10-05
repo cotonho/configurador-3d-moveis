@@ -943,20 +943,22 @@
       return Math.round(v) + " cm";
     }
 
-    // Yaw atual do móvel (0 se nunca girado): as cotas vivem no
-    // referencial dele e giram junto via dimsGroup.
-    function furnitureYaw() {
-      const groups = window._furnitureGroups || [];
-      for (const g of groups) {
-        const u = g.userData || {};
-        if (typeof u._rotAbs === "number") return u._rotAbs;
+    // Yaw do(s) móvel(is) medido(s) — nunca global: com 2+ peças, o giro de
+    // uma contaminava as cotas da outra através do dimsGroup único.
+    // Sem raízes (cena toda), 0: não há um referencial único para girar.
+    function yawOfRoots(roots) {
+      if (roots && roots.length) {
+        for (const r of roots) {
+          const u = r && r.userData;
+          if (u && typeof u._rotAbs === "number") return u._rotAbs;
+        }
       }
       return 0;
     }
 
-    function rebuildDimensions(box) {
+    function rebuildDimensions(box, yawArg) {
       if (!dimsOn) return;
-      const yaw = furnitureYaw();
+      const yaw = typeof yawArg === "number" ? yawArg : 0;
       if (box) {
         diagLog('[DIM] box cru min=[' + Math.round(box.min.x) + ',' + Math.round(box.min.y) + ',' + Math.round(box.min.z) +
           '] max=[' + Math.round(box.max.x) + ',' + Math.round(box.max.y) + ',' + Math.round(box.max.z) +
@@ -1171,12 +1173,13 @@
       }
       lastCenterUpdate = now;
       ensureFurnitureScaled();
-      const box = computeFurnitureBox(selectedFurnitureRoots());
+      const measuredRoots = selectedFurnitureRoots();
+      const box = computeFurnitureBox(measuredRoots);
       if (!box) {
         rebuildDimensions(null);
         return;
       }
-      rebuildDimensions(box);
+      rebuildDimensions(box, yawOfRoots(measuredRoots));
       // Esconde cenário por sessão (limite próprio): um modelo gigante não
       // revela o piso do outro. O resto (sem dono) usa o limite global.
       (function hidePerSession() {
