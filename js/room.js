@@ -550,10 +550,10 @@
     // teto absoluto em cm nos pontos de filtro fora do caminho por-sessao.
     let lastSessionScales = new Map();
 
-    // Última pose desejada por ID de sessão: [x, y, rotZ-absoluta ou null].
-    // Sobrevive à troca de identidade dos objetos 3D (rebuild após
-    // customize): o objeto novo volta ao ponto E giro antigos em vez de
-    // cair no spawn de novo.
+    // Última pose desejada por ID de sessão: [x, y, rotZ, meio-largura,
+    // meio-profundidade]. O tamanho antigo permite reancorar a mesma borda
+    // de parede após crescer (não o centro). Sobrevive à troca de identidade
+    // dos objetos 3D (rebuild após customize).
     const lastKnownXYBySession = new Map();
 
     // Log de diagnóstico: só aparece com window.__DIM_VERBOSE = true.
@@ -792,14 +792,29 @@
             let spot = null;
             let spotHow = 'ranges-invalidos';
             if (remembered) {
-              // Rebuild nunca teleporta: mantém o ponto antigo sempre. Só
-              // respeita as PAREDES (nudge mínimo até o range válido);
-              // sobreposição com outros móveis após crescer fica por conta
-              // do usuário (arrasto) — o sistema não move peça sozinho.
-              const rx = Math.min(maxCX, Math.max(minCX, remembered[0]));
-              const ry = Math.min(maxCY, Math.max(minCY, remembered[1]));
-              spot = { x: rx, y: ry };
-              spotHow = (rx === remembered[0] && ry === remembered[1])
+              // Rebuild nunca teleporta: mantém o ponto antigo. Se a peça
+              // estava COLADA numa parede, ancora a MESMA borda (não o
+              // centro): crescer não desgruda da parede. Nudge de centro só
+              // como trava final de segurança. Sobreposição com outros
+              // móveis após crescer fica por conta do usuário (arrasto).
+              const EPS_WALL = 2;
+              const loX = -ROOM_LIMIT.x + wall, hiX = ROOM_LIMIT.x - wall;
+              const loY = -ROOM_LIMIT.y + wall, hiY = ROOM_LIMIT.y - wall;
+              let sx = remembered[0], sy = remembered[1];
+              if (typeof remembered[3] === "number" && remembered[3] > 0) {
+                const oHw = remembered[3];
+                if (Math.abs(remembered[0] - oHw - loX) <= EPS_WALL) sx = loX + hw;
+                else if (Math.abs(remembered[0] + oHw - hiX) <= EPS_WALL) sx = hiX - hw;
+              }
+              if (typeof remembered[4] === "number" && remembered[4] > 0) {
+                const oHd = remembered[4];
+                if (Math.abs(remembered[1] - oHd - loY) <= EPS_WALL) sy = loY + hd;
+                else if (Math.abs(remembered[1] + oHd - hiY) <= EPS_WALL) sy = hiY + hd;
+              }
+              sx = Math.min(maxCX, Math.max(minCX, sx));
+              sy = Math.min(maxCY, Math.max(minCY, sy));
+              spot = { x: sx, y: sy };
+              spotHow = (sx === remembered[0] && sy === remembered[1])
                 ? 'memoria-sessao' : 'memoria-sessao-ajustada';
             }
             if (!spot && minCX <= maxCX && minCY <= maxCY) {
@@ -883,7 +898,11 @@
           const evWant = g.userData && g.userData._wantXY;
           const evRot = g.userData && typeof g.userData._rotAbs === "number"
             ? (g.userData._rotBase || 0) + g.userData._rotAbs : null;
-          if (evSess && evWant) lastKnownXYBySession.set(evSess, [evWant[0], evWant[1], evRot]);
+          if (evSess && evWant) {
+            const eb = filteredBoxFor(g);
+            lastKnownXYBySession.set(evSess, [evWant[0], evWant[1], evRot,
+              (eb.max.x - eb.min.x) / 2, (eb.max.y - eb.min.y) / 2]);
+          }
           scaledFurniture.splice(i, 1);
           continue;
         }
@@ -908,7 +927,18 @@
         const memWant = g.userData._wantXY;
         const memRot = typeof g.userData._rotAbs === "number"
           ? (g.userData._rotBase || 0) + g.userData._rotAbs : null;
-        if (memSess && memWant) lastKnownXYBySession.set(memSess, [memWant[0], memWant[1], memRot]);
+        if (memSess && memWant) {
+          const prev = lastKnownXYBySession.get(memSess);
+          if (!prev || prev[0] !== memWant[0] || prev[1] !== memWant[1] ||
+              typeof prev[3] !== "number" || typeof prev[4] !== "number") {
+            // Posição nova ou sem tamanho: mede (só aqui; parado não remede).
+            const mb = filteredBoxFor(g);
+            lastKnownXYBySession.set(memSess, [memWant[0], memWant[1], memRot,
+              (mb.max.x - mb.min.x) / 2, (mb.max.y - mb.min.y) / 2]);
+          } else if (prev[2] !== memRot) {
+            prev[2] = memRot;
+          }
+        }
       }
     }
 
