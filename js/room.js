@@ -550,9 +550,10 @@
     // teto absoluto em cm nos pontos de filtro fora do caminho por-sessao.
     let lastSessionScales = new Map();
 
-    // Última posição desejada por ID de sessão. Sobrevive à troca de
-    // identidade dos objetos 3D (rebuild após customize): o objeto novo
-    // volta ao ponto antigo em vez de cair no spawn de novo.
+    // Última pose desejada por ID de sessão: [x, y, rotZ-absoluta ou null].
+    // Sobrevive à troca de identidade dos objetos 3D (rebuild após
+    // customize): o objeto novo volta ao ponto E giro antigos em vez de
+    // cair no spawn de novo.
     const lastKnownXYBySession = new Map();
 
     // Log de diagnóstico: só aparece com window.__DIM_VERBOSE = true.
@@ -826,6 +827,21 @@
               g.userData = g.userData || {};
               if (!g.userData._wantXY) g.userData._wantXY = [g.position.x, g.position.y];
             });
+            // Giro lembrado: aplica no objeto novo (que nasceu sem giro).
+            // Decompõe em base=nascimento atual + abs=delta, como o slider faz;
+            // o bloco de restauração mantém a partir daí. Nunca atropela giro
+            // que o usuário já tenha dado neste objeto.
+            if (remembered && typeof remembered[2] === "number") {
+              fresh.forEach((g) => {
+                g.userData = g.userData || {};
+                if (typeof g.userData._rotAbs !== "number") {
+                  g.userData._rotBase = g.rotation.z || 0;
+                  g.userData._rotAbs = remembered[2] - g.userData._rotBase;
+                  g.rotation.z = g.userData._rotBase + g.userData._rotAbs;
+                  g.updateMatrixWorld(true);
+                }
+              });
+            }
             if (dx || dy) {
               fresh.forEach((g) => {
                 g.position.x += dx;
@@ -855,10 +871,12 @@
             ' sessao=' + ((g.userData && g.userData._sessId) || '?') +
             ' escala=' + ((g.userData && g.userData._furnScaled) || '?') +
             ' wantXY=' + ((g.userData && g.userData._wantXY) ? g.userData._wantXY.map(Math.round).join(',') : '-'));
-          // Guarda o ponto antigo pela sessão antes de descartar o objeto.
+          // Guarda pose antiga pela sessão antes de descartar o objeto.
           const evSess = g.userData && g.userData._sessId;
           const evWant = g.userData && g.userData._wantXY;
-          if (evSess && evWant) lastKnownXYBySession.set(evSess, [evWant[0], evWant[1]]);
+          const evRot = g.userData && typeof g.userData._rotAbs === "number"
+            ? (g.userData._rotBase || 0) + g.userData._rotAbs : null;
+          if (evSess && evWant) lastKnownXYBySession.set(evSess, [evWant[0], evWant[1], evRot]);
           scaledFurniture.splice(i, 1);
           continue;
         }
@@ -877,11 +895,13 @@
             g.updateMatrixWorld(true);
           }
         }
-        // Memória por sessão: sincroniza a posição desejada a cada passe
-        // (cobre spawn, arrasto manual e slider, sem mexer nesses arquivos).
+        // Memória por sessão: sincroniza pose desejada a cada passe (cobre
+        // spawn, arrasto manual e slider, sem mexer nesses arquivos).
         const memSess = g.userData._sessId;
         const memWant = g.userData._wantXY;
-        if (memSess && memWant) lastKnownXYBySession.set(memSess, [memWant[0], memWant[1]]);
+        const memRot = typeof g.userData._rotAbs === "number"
+          ? (g.userData._rotBase || 0) + g.userData._rotAbs : null;
+        if (memSess && memWant) lastKnownXYBySession.set(memSess, [memWant[0], memWant[1], memRot]);
       }
     }
 
