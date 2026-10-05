@@ -57,11 +57,34 @@
       return;
     }
     body.innerHTML = "";
-    entry.getParameters().forEach((param) => {
+    // Ordem do autor do modelo (param.order) + cabeçalhos por grupo
+    // (param.group.name): organização genérica, funciona para qualquer
+    // móvel sem configuração individual. Sem order, mantém a ordem vinda
+    // do modelo; grupos ignorados (buildControl=null) não geram cabeçalho.
+    const ordered = entry.getParameters().map((p, i) => [p, i]);
+    ordered.sort((A, B) => {
+      const oa = typeof A[0].order === "number" ? A[0].order : null;
+      const ob = typeof B[0].order === "number" ? B[0].order : null;
+      if (oa === null && ob === null) return A[1] - B[1];
+      if (oa === null) return 1;
+      if (ob === null) return -1;
+      return oa - ob || A[1] - B[1];
+    });
+    let lastGroup = null;
+    ordered.forEach(([param]) => {
       const row = window.controlsUI.buildControl(param);
-      if (row) {
-        body.appendChild(row);
+      if (!row) {
+        return;
       }
+      const g = param.group && param.group.name ? String(param.group.name) : "";
+      if (g && g !== lastGroup) {
+        const h = document.createElement("div");
+        h.className = "control-group";
+        h.textContent = g;
+        body.appendChild(h);
+      }
+      lastGroup = g;
+      body.appendChild(row);
     });
   }
 

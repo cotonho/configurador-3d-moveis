@@ -27,7 +27,10 @@ window.SD_CONFIG = {
       "Obj Export EOL",
       "Obj Export Object Names",
       "Email Export Format"
-    ]
+    ],
+    // Até N opções: botões. Acima disso: dropdown. Global, vale para
+    // qualquer móvel sem configuração individual.
+    choiceButtonMax: 6
   },
 room: {
     enabled: true,

@@ -153,6 +153,18 @@ console.log("main.js carregado - v3-multisession");
         btn.classList.toggle("selected", isSelected);
       });
     }
+    if (row._select && Array.isArray(row._choiceValues)) {
+      const current = String(param.value);
+      const indexFallback = /^\d+$/.test(current) ? Number(current) : -1;
+      const values = row._choiceValues;
+      let sel = values.findIndex((v) => String(v) === current);
+      if (sel < 0 && indexFallback >= 0 && indexFallback < values.length) {
+        sel = indexFallback;
+      }
+      if (sel >= 0) {
+        row._select.selectedIndex = sel;
+      }
+    }
   }
 
   function syncAll() {
@@ -281,6 +293,49 @@ console.log("main.js carregado - v3-multisession");
     return row;
   }
 
+  // Dropdown genérico p/ listas longas (ex. features com muitas opções):
+  // mesma fonte de dados dos botões, com a mesma resolução de valor atual.
+  function buildDropdown(param) {
+    const choices = Array.isArray(param.choices) ? param.choices : [];
+    if (choices.length === 0) {
+      return null;
+    }
+    const label = document.createElement("label");
+    label.className = "control-label";
+    label.textContent = param.name;
+
+    const select = document.createElement("select");
+    select.className = "control-select";
+    const values = choices.map(choiceValue);
+    choices.forEach((choice) => {
+      const opt = document.createElement("option");
+      opt.textContent = choiceLabel(choice);
+      select.appendChild(opt);
+    });
+    const current = String(param.value);
+    const indexFallback = /^\d+$/.test(current) ? Number(current) : -1;
+    let sel = values.findIndex((v) => String(v) === current);
+    if (sel < 0 && indexFallback >= 0 && indexFallback < values.length) {
+      sel = indexFallback;
+    }
+    select.selectedIndex = sel >= 0 ? sel : 0;
+
+    const row = document.createElement("div");
+    row.className = "control-row";
+    row.append(label, select);
+    row._select = select;
+    row._choiceValues = values;
+    registerRow(row, param);
+
+    select.addEventListener("change", () => {
+      const i = select.selectedIndex;
+      if (i >= 0 && i < values.length) {
+        applyConstraintsAndSend(param, values[i]);
+      }
+    });
+    return row;
+  }
+
   function buildColor(param) {
     const label = document.createElement("label");
     label.className = "control-label";
@@ -358,6 +413,14 @@ console.log("main.js carregado - v3-multisession");
       return buildColor(param);
     }
     if (Array.isArray(param.choices) && param.choices.length > 0) {
+      // Poucas opções: botões (com swatch p/ cores). Muitas: dropdown.
+      // Limite global em config.controls.choiceButtonMax (default 6) —
+      // vale para qualquer móvel, sem configuração individual.
+      const maxBtn =
+        (config.controls && config.controls.choiceButtonMax) || 6;
+      if (param.choices.length > maxBtn) {
+        return buildDropdown(param);
+      }
       return buildChoice(param);
     }
     if (colorToHex(param.value)) {
