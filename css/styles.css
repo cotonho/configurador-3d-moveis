@@ -255,6 +255,28 @@ body {
   margin-top: 0;
 }
 
+.control-section {
+  margin-bottom: 4px;
+}
+
+.control-group.collapsible {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.group-caret {
+  font-size: 10px;
+  width: 12px;
+  flex: none;
+}
+
+.control-section.collapsed .control-rows {
+  display: none;
+}
+
 .choice-options {
   display: flex;
   flex-wrap: wrap;

@@ -67,6 +67,7 @@ js/vendor/            (não versionado) bundles locais para redes sem CDN
 | `room.debug` | Painel de medição chão × pés na tela |
 | `camera.polarMin/polarMax/zoomMin/zoomMax` | Limites de órbita e distância |
 | `controls.ignore` | Parâmetros ocultos da sidebar |
+| `controls.groups` | Seções colapsáveis: `defaultCollapsed`, `collapsed[]`, `expanded[]` por nome exato da seção |
 
 ## Controles genéricos (contrato com o modelo)
 
