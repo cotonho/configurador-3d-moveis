@@ -153,6 +153,18 @@ console.log("main.js carregado - v3-multisession");
         btn.classList.toggle("selected", isSelected);
       });
     }
+    if (row._select && Array.isArray(row._choiceValues)) {
+      const current = String(param.value);
+      const indexFallback = /^\d+$/.test(current) ? Number(current) : -1;
+      const values = row._choiceValues;
+      let sel = values.findIndex((v) => String(v) === current);
+      if (sel < 0 && indexFallback >= 0 && indexFallback < values.length) {
+        sel = indexFallback;
+      }
+      if (sel >= 0) {
+        row._select.selectedIndex = sel;
+      }
+    }
   }
 
   function syncAll() {
@@ -267,7 +279,7 @@ console.log("main.js carregado - v3-multisession");
           b.classList.remove("selected");
         });
         btn.classList.add("selected");
-        applyConstraintsAndSend(param, choiceValue(choice));
+        applyConstraintsAndSend(param, choiceSendValue(param, choice, i));
       });
 
       options.appendChild(btn);
@@ -278,6 +290,71 @@ console.log("main.js carregado - v3-multisession");
     row.append(label, options);
     row._options = options;
     registerRow(row, param);
+    return row;
+  }
+
+  // Dropdown genérico p/ listas longas (ex. features com muitas opções):
+  // mesma fonte de dados dos botões, com a mesma resolução de valor atual.
+  // Alguns StringList guardam o ÍNDICE ("0") em vez do texto da opção.
+  // Detecta pelo valor atual: se ele não bate com nenhum texto de opção
+  // mas é numérico, envia o índice no MESMO TIPO do valor atual (string
+  // "1" ou número 1); senão envia o valor cru. Genérico para qualquer
+  // móvel, sem configuração individual.
+  function choiceSendValue(param, choice, index) {
+    const v = choiceValue(choice);
+    try {
+      const texts = (param.choices || []).map((c) => String(choiceValue(c)));
+      const current = String(param.value);
+      if (
+        texts.indexOf(current) === -1 &&
+        /^\d+$/.test(current) &&
+        Number.isInteger(index) &&
+        index >= 0
+      ) {
+        return typeof param.value === "number" ? index : String(index);
+      }
+    } catch (e) {}
+    return v;
+  }
+
+  function buildDropdown(param) {
+    const choices = Array.isArray(param.choices) ? param.choices : [];
+    if (choices.length === 0) {
+      return null;
+    }
+    const label = document.createElement("label");
+    label.className = "control-label";
+    label.textContent = param.name;
+
+    const select = document.createElement("select");
+    select.className = "control-select";
+    const values = choices.map(choiceValue);
+    choices.forEach((choice) => {
+      const opt = document.createElement("option");
+      opt.textContent = choiceLabel(choice);
+      select.appendChild(opt);
+    });
+    const current = String(param.value);
+    const indexFallback = /^\d+$/.test(current) ? Number(current) : -1;
+    let sel = values.findIndex((v) => String(v) === current);
+    if (sel < 0 && indexFallback >= 0 && indexFallback < values.length) {
+      sel = indexFallback;
+    }
+    select.selectedIndex = sel >= 0 ? sel : 0;
+
+    const row = document.createElement("div");
+    row.className = "control-row";
+    row.append(label, select);
+    row._select = select;
+    row._choiceValues = values;
+    registerRow(row, param);
+
+    select.addEventListener("change", () => {
+      const i = select.selectedIndex;
+      if (i >= 0 && i < values.length) {
+        applyConstraintsAndSend(param, choiceSendValue(param, choices[i], i));
+      }
+    });
     return row;
   }
 
@@ -358,7 +435,14 @@ console.log("main.js carregado - v3-multisession");
       return buildColor(param);
     }
     if (Array.isArray(param.choices) && param.choices.length > 0) {
-      return buildChoice(param);
+      // Escolhas de cor: botões swatch (precisam ser visuais). Todo o resto
+      // (texto, seleção única ou não): dropdown — compacto e genérico para
+      // qualquer móvel, sem configuração individual.
+      const allSwatch = param.choices.every((c) => colorToHex(choiceValue(c)));
+      if (allSwatch) {
+        return buildChoice(param);
+      }
+      return buildDropdown(param);
     }
     if (colorToHex(param.value)) {
       return buildColor(param);

@@ -7,6 +7,24 @@
   // entradas com { id, label, root, getParameters } via registerFurniture.
   window.furnitureRegistry = window.furnitureRegistry || [];
   let selectedId = null;
+  // Colapsado por seção (nome -> bool), clicado pelo usuário. Sobrevive às
+  // re-renderizações da sidebar; o estado inicial vem de controls.groups.
+  const collapsedByUser = new Map();
+
+  // Estado inicial de uma seção: toggle do usuário > listas collapsed/
+  // expanded (nome exato) > defaultCollapsed global. Tudo opcional.
+  function isGroupCollapsed(name) {
+    if (collapsedByUser.has(name)) return collapsedByUser.get(name);
+    const gc = (config.controls && config.controls.groups) || {};
+    if (Array.isArray(gc.collapsed) && gc.collapsed.indexOf(name) !== -1) {
+      return true;
+    }
+    if (Array.isArray(gc.expanded) && gc.expanded.indexOf(name) !== -1) {
+      return false;
+    }
+    // Padrão: guardado. Só abre por padrão com defaultCollapsed: false.
+    return gc.defaultCollapsed !== false;
+  }
 
   function loadTHREE(callback) {
     if (window.THREE) {
@@ -57,11 +75,70 @@
       return;
     }
     body.innerHTML = "";
-    entry.getParameters().forEach((param) => {
+    // Ordem do autor do modelo (param.order) + cabeçalhos por grupo
+    // (param.group.name): organização genérica, funciona para qualquer
+    // móvel sem configuração individual. Sem order, mantém a ordem vinda
+    // do modelo; grupos ignorados (buildControl=null) não geram cabeçalho.
+    const ordered = entry.getParameters().map((p, i) => [p, i]);
+    ordered.sort((A, B) => {
+      const oa = typeof A[0].order === "number" ? A[0].order : null;
+      const ob = typeof B[0].order === "number" ? B[0].order : null;
+      if (oa === null && ob === null) return A[1] - B[1];
+      if (oa === null) return 1;
+      if (ob === null) return -1;
+      return oa - ob || A[1] - B[1];
+    });
+    let lastGroup = null;
+    let rowsWrap = null;
+    ordered.forEach(([param]) => {
       const row = window.controlsUI.buildControl(param);
-      if (row) {
-        body.appendChild(row);
+      if (!row) {
+        return;
       }
+      const g = param.group && param.group.name ? String(param.group.name) : "";
+      if (!g) {
+        lastGroup = null;
+        rowsWrap = null;
+        body.appendChild(row);
+        return;
+      }
+      if (g !== lastGroup) {
+        lastGroup = g;
+        const section = document.createElement("div");
+        section.className = "control-section";
+        const h = document.createElement("div");
+        h.className = "control-group collapsible";
+        h.setAttribute("role", "button");
+        h.setAttribute("tabindex", "0");
+        const caret = document.createElement("span");
+        caret.className = "group-caret";
+        h.appendChild(caret);
+        h.appendChild(document.createTextNode(g));
+        rowsWrap = document.createElement("div");
+        rowsWrap.className = "control-rows";
+        const applyState = () => {
+          const c = isGroupCollapsed(g);
+          section.classList.toggle("collapsed", c);
+          caret.textContent = c ? "▸" : "▾";
+          h.setAttribute("aria-expanded", String(!c));
+        };
+        applyState();
+        const toggle = () => {
+          collapsedByUser.set(g, !isGroupCollapsed(g));
+          applyState();
+        };
+        h.addEventListener("click", toggle);
+        h.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggle();
+          }
+        });
+        section.appendChild(h);
+        section.appendChild(rowsWrap);
+        body.appendChild(section);
+      }
+      rowsWrap.appendChild(row);
     });
   }
 
