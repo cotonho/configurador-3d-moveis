@@ -27,10 +27,10 @@ window.SD_CONFIG = {
       "Obj Export EOL",
       "Obj Export Object Names",
       "Email Export Format"
-    ],
-    // Até N opções: botões. Acima disso: dropdown. Global, vale para
-    // qualquer móvel sem configuração individual.
-    choiceButtonMax: 6
+    ]
+    // Regra de controles (automática, sem config por móvel): escolhas de cor
+    // viram botões swatch; todo o resto vira slider, dropdown, checkbox etc.
+    // Ordem e agrupamento vêm de param.order / param.group.name do modelo.
   },
 room: {
     enabled: true,

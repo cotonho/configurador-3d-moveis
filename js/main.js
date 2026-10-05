@@ -413,15 +413,14 @@ console.log("main.js carregado - v3-multisession");
       return buildColor(param);
     }
     if (Array.isArray(param.choices) && param.choices.length > 0) {
-      // Poucas opções: botões (com swatch p/ cores). Muitas: dropdown.
-      // Limite global em config.controls.choiceButtonMax (default 6) —
-      // vale para qualquer móvel, sem configuração individual.
-      const maxBtn =
-        (config.controls && config.controls.choiceButtonMax) || 6;
-      if (param.choices.length > maxBtn) {
-        return buildDropdown(param);
+      // Escolhas de cor: botões swatch (precisam ser visuais). Todo o resto
+      // (texto, seleção única ou não): dropdown — compacto e genérico para
+      // qualquer móvel, sem configuração individual.
+      const allSwatch = param.choices.every((c) => colorToHex(choiceValue(c)));
+      if (allSwatch) {
+        return buildChoice(param);
       }
-      return buildChoice(param);
+      return buildDropdown(param);
     }
     if (colorToHex(param.value)) {
       return buildColor(param);
