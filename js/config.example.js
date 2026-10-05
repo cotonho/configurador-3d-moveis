@@ -33,17 +33,7 @@ window.SD_CONFIG = {
       "Obj Export Object Names",
       "Email Export Format"
     ]
-    // Regra de controles (automática, sem config por móvel): escolhas de cor
-    // viram botões swatch; todo o resto vira slider, dropdown, checkbox etc.
-    // Ordem e agrupamento vêm de param.order / param.group.name do modelo.
-    // Seções colapsáveis (genérico): estado inicial por nome exato da seção.
-    // Padrão: todas começam guardadas; defaultCollapsed: false abre tudo.
-    // collapsed/expanded: exceções por seção.
-    // groups: {
-    //   defaultCollapsed: true,
-    //   collapsed: ["BAY FEATURE"],
-    //   expanded: ["PARAMETERS"]
-    // }
+    // collision: false, // desliga a colisão entre móveis no arrasto (padrão: ligada)
   },
   room: {
     enabled: true,
