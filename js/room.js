@@ -791,9 +791,16 @@
             }
             let spot = null;
             let spotHow = 'ranges-invalidos';
-            if (remembered && fits(remembered[0], remembered[1]) && clearOf(remembered[0], remembered[1])) {
-              spot = { x: remembered[0], y: remembered[1] };
-              spotHow = 'memoria-sessao';
+            if (remembered) {
+              // Rebuild nunca teleporta: mantém o ponto antigo sempre. Só
+              // respeita as PAREDES (nudge mínimo até o range válido);
+              // sobreposição com outros móveis após crescer fica por conta
+              // do usuário (arrasto) — o sistema não move peça sozinho.
+              const rx = Math.min(maxCX, Math.max(minCX, remembered[0]));
+              const ry = Math.min(maxCY, Math.max(minCY, remembered[1]));
+              spot = { x: rx, y: ry };
+              spotHow = (rx === remembered[0] && ry === remembered[1])
+                ? 'memoria-sessao' : 'memoria-sessao-ajustada';
             }
             if (!spot && minCX <= maxCX && minCY <= maxCY) {
               const step = Math.max(hw * 2, hd * 2, 150);
