@@ -259,6 +259,39 @@
       };
     }
 
+    // Box só com meshes aprovados no filtro (mesmo critério da escala e das
+    // cotas): setFromObject cru incluiria gigantes espúrios (piso espelhado,
+    // decoração) e contaminaria ocupação/spawn com área fantasma — a espiral
+    // não acha ponto livre e tudo cai no fallback do centro.
+    function filteredBoxFor(node) {
+      const meshes = [];
+      if (node.isMesh === true && node.geometry) meshes.push(node);
+      else collectMeshes(node, meshes);
+      const box = new THREE.Box3();
+      if (!meshes.length) return box;
+      const limit = limitForMeshes(meshes);
+      // cm/unidade da sessão dona (sobe até raiz conhecida); cai no global.
+      let cpu = FURNITURE_SCALE > 0 ? FURNITURE_SCALE : 1;
+      let c = node;
+      while (c) {
+        if (lastSessionScales.has(c)) {
+          cpu = lastSessionScales.get(c);
+          break;
+        }
+        c = c.parent;
+      }
+      meshes.forEach((mesh) => {
+        if (mesh.isMesh !== true || !mesh.geometry) return;
+        if (!meshFilterResult(mesh, limit, cpu).kept) return;
+        box.union(furnitureBox.setFromObject(mesh));
+      });
+      if (box.isEmpty()) {
+        // Nada passou no filtro: usa a crua para o grupo não sumir do mapa.
+        box.union(new THREE.Box3().setFromObject(node));
+      }
+      return box;
+    }
+
     // cm por unidade do modelo de uma sessao (p/ converter o diag estimado).
     function cmPerUnitForUnits(units) {
       const sc = scaleForUnit(units || roomConfig.modelUnits || "in");
@@ -696,14 +729,14 @@
         const occ = [];
         scaledFurniture.forEach((g) => {
           if (!g.parent || scaledThisPass.indexOf(g) !== -1) return;
-          const ob = new THREE.Box3().setFromObject(g);
+          const ob = filteredBoxFor(g);
           if (!ob.isEmpty()) occ.push(ob);
         });
         const fresh = scaledThisPass.filter((g) => g.parent);
         if (fresh.length) {
           const ub = new THREE.Box3();
           fresh.forEach((g) => {
-            const gb = new THREE.Box3().setFromObject(g);
+            const gb = filteredBoxFor(g);
             diagLog('[SPAWN] fresh grupo=' + (g.name || g.type) +
               ' #' + String(g.uuid).slice(0, 8) +
               ' sessao=' + ((g.userData && g.userData._sessId) || '?') +
