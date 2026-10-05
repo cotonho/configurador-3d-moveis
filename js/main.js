@@ -279,7 +279,7 @@ console.log("main.js carregado - v3-multisession");
           b.classList.remove("selected");
         });
         btn.classList.add("selected");
-        applyConstraintsAndSend(param, choiceValue(choice));
+        applyConstraintsAndSend(param, choiceSendValue(param, choice, i));
       });
 
       options.appendChild(btn);
@@ -295,6 +295,27 @@ console.log("main.js carregado - v3-multisession");
 
   // Dropdown genérico p/ listas longas (ex. features com muitas opções):
   // mesma fonte de dados dos botões, com a mesma resolução de valor atual.
+  // Alguns StringList guardam o ÍNDICE ("0") em vez do texto da opção.
+  // Detecta pelo valor atual: se ele não bate com nenhum texto de opção
+  // mas é numérico, envia o índice; senão envia o valor cru. Genérico para
+  // qualquer móvel, sem configuração individual.
+  function choiceSendValue(param, choice, index) {
+    const v = choiceValue(choice);
+    try {
+      const texts = (param.choices || []).map((c) => String(choiceValue(c)));
+      const current = String(param.value);
+      if (
+        texts.indexOf(current) === -1 &&
+        /^\d+$/.test(current) &&
+        Number.isInteger(index) &&
+        index >= 0
+      ) {
+        return index;
+      }
+    } catch (e) {}
+    return v;
+  }
+
   function buildDropdown(param) {
     const choices = Array.isArray(param.choices) ? param.choices : [];
     if (choices.length === 0) {
@@ -330,7 +351,7 @@ console.log("main.js carregado - v3-multisession");
     select.addEventListener("change", () => {
       const i = select.selectedIndex;
       if (i >= 0 && i < values.length) {
-        applyConstraintsAndSend(param, values[i]);
+        applyConstraintsAndSend(param, choiceSendValue(param, choices[i], i));
       }
     });
     return row;
