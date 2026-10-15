@@ -277,6 +277,34 @@ body {
   display: none;
 }
 
+#side-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.side-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.side-tab.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+#pane-models[hidden],
+#pane-furniture[hidden] {
+  display: none;
+}
+
 .choice-options {
   display: flex;
   flex-wrap: wrap;
