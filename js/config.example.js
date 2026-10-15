@@ -56,7 +56,6 @@ window.SD_CONFIG = {
       smoothness: 0.1,
       sideMargin: 200
     },
-    debug: true,
     furnitureCenter: null
   },
   camera: {

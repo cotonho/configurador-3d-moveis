@@ -64,7 +64,6 @@ js/vendor/            (não versionado) bundles locais para redes sem CDN
 | `room.maxFurniturePieceCm` | (opcional, default 400) teto absoluto p/ peça no filtro |
 | `room.hideScenery` | Oculta decoração do modelo |
 | `room.wallCulling` | Paredes somem conforme a câmera (`enabled`, margens, opacidades) |
-| `room.debug` | Painel de medição chão × pés na tela |
 | `camera.polarMin/polarMax/zoomMin/zoomMax` | Limites de órbita e distância |
 | `controls.ignore` | Parâmetros ocultos da sidebar |
 | `controls.groups` | Seções colapsáveis: `defaultCollapsed` (padrão true), `collapsed[]`, `expanded[]` por nome exato da seção |

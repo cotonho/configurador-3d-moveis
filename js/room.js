@@ -1016,8 +1016,6 @@
       }
     }
 
-    let debugEl = null;
-
     // Cotas do móvel: 3 linhas (X/Y/Z da caixa) + etiquetas HTML que
     // acompanham a câmera. Medidas em unidades da cena (cm por padrão).
     const dimsOn = roomConfig.dimensions !== false;
@@ -1271,63 +1269,6 @@
       });
     }
 
-    function updateDebug(box, limit) {
-      if (roomConfig.debug !== true) {
-        return;
-      }
-      if (!debugEl) {
-        debugEl = document.createElement("div");
-        debugEl.id = "room-debug";
-        debugEl.style.cssText =
-          "position:absolute;left:16px;bottom:140px;z-index:20;font:11px monospace;color:#1d2733;background:rgba(255,255,255,0.85);padding:6px 10px;border-radius:8px;border:1px solid #dfe5ec;white-space:pre;";
-        document.body.appendChild(debugEl);
-      }
-      const wallsState = walls
-        .map((w) => w.userData.name + ":" + (w.userData.hidden ? "S" : "N"))
-        .join(" ");
-      const wallPositions = walls
-        .map((w) => {
-          const p = tmp.copy(w.position).add(room.position).add(roomRoot.position);
-          return (
-            w.userData.name +
-            ":" +
-            (w.userData.along === "x"
-              ? "y=" + Math.round(p.y)
-              : "x=" + Math.round(p.x))
-          );
-        })
-        .join(" ");
-      debugEl.textContent =
-        "cam(" +
-        camPos.x.toFixed(0) +
-        "," +
-        camPos.y.toFixed(0) +
-        "," +
-        camPos.z.toFixed(0) +
-        ") | dist: " +
-        camPos.distanceTo(targetVec).toFixed(0) +
-        " | sala: " +
-        Math.round(WIDTH) +
-        "x" +
-        Math.round(DEPTH) +
-        "x" +
-        Math.round(HEIGHT) +
-        " | " +
-        wallPositions +
-        " | parede(z): " +
-        Math.round(HEIGHT / 2) +
-        " | chao(z): " +
-        roomRoot.position.z.toFixed(0) +
-        " | pes(z): " +
-        box.min.z.toFixed(0) +
-        " | gap: " +
-        (box.min.z - roomRoot.position.z).toFixed(0) +
-        " | lim: " +
-        Math.round(limit && limit.p90 !== undefined ? limit.p90 : limit) +
-        " | paredes: " +
-        wallsState;
-    }
-
     function hideSceneryIn(obj, limit, cmPerUnit) {
       if (roomConfig.hideScenery === false) {
         return;
@@ -1404,7 +1345,6 @@
       box.getCenter(center);
       floorTarget.copy(center);
       floorTarget.z = roomRoot.position.z + 1;
-      updateDebug(box, furnitureDiagLimit());
     }
 
     function vec3Of(obj, out) {

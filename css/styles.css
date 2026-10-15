@@ -51,7 +51,7 @@ body {
 
 .viewer-wrap {
   position: relative;
-  height: calc(100vh - 57px);
+  height: calc(100vh - 57px - 53px);
 }
 
 #side-panel .price-box {
@@ -195,7 +195,7 @@ body {
   border-left: 1px solid var(--border);
   padding: 20px;
   overflow-y: auto;
-  height: calc(100vh - 57px);
+  height: calc(100vh - 57px - 53px);
 }
 
 .panel h2 {
@@ -415,6 +415,22 @@ body {
 .price-box strong {
   font-size: 20px;
   color: var(--accent);
+}
+
+#bottom-bar {
+  height: 53px;
+  flex: none;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 24px;
+}
+
+#bottom-bar .price-box {
+  margin: 0;
+  padding: 6px 14px;
 }
 
 #side-panel-body .control-label {
