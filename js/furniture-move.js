@@ -206,6 +206,13 @@
         return new THREE.Box3().setFromObject(g);
       }
       function hitsOthers() {
+        // OBB orientada (acompanha o giro). Só usa a AABB crua abaixo como
+        // fallback quando o helper não existe (retorno do helper vale).
+        if (typeof window.furnitureOverlapsAny === "function") {
+          try {
+            return !!window.furnitureOverlapsAny(d.roots);
+          } catch (e) {}
+        }
         const known = window._furnitureGroups || [];
         const mine = [];
         d.roots.forEach((g) => {
