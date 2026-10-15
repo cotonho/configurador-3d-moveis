@@ -1054,6 +1054,49 @@
       return Math.round(v) + " cm";
     }
 
+    // Contorno branco da peça selecionada (Box3Helper atualizado por frame).
+    // Usa a box filtrada (mesmo critério das cotas): gigantes espúrios não
+    // entram no contorno. Escondido sem seleção ou com cotas desligadas.
+    let selectionHelper = null;
+    const outlineBox = new THREE.Box3();
+    function updateSelectionOutline() {
+      if (!dimsOn) {
+        if (selectionHelper) selectionHelper.visible = false;
+        return;
+      }
+      if (!selectionHelper) {
+        if (!scene) return;
+        selectionHelper = new THREE.Box3Helper(new THREE.Box3(), 0xffffff);
+        selectionHelper.visible = false;
+        selectionHelper.material.depthTest = false;
+        selectionHelper.material.transparent = true;
+        selectionHelper.material.opacity = 0.9;
+        selectionHelper.renderOrder = 998;
+        scene.add(selectionHelper);
+      }
+      let roots = null;
+      try {
+        roots = selectedFurnitureRoots();
+      } catch (e) {
+        roots = null;
+      }
+      if (!roots || !roots.length) {
+        selectionHelper.visible = false;
+        return;
+      }
+      outlineBox.makeEmpty();
+      roots.forEach((r) => {
+        if (!r || !r.parent) return;
+        outlineBox.union(filteredBoxFor(r));
+      });
+      if (outlineBox.isEmpty()) {
+        selectionHelper.visible = false;
+        return;
+      }
+      selectionHelper.box.copy(outlineBox);
+      selectionHelper.visible = true;
+    }
+
     // Yaw do(s) móvel(is) medido(s) — nunca global: com 2+ peças, o giro de
     // uma contaminava as cotas da outra através do dimsGroup único.
     // Sem raízes (cena toda), 0: não há um referencial único para girar.
@@ -1354,6 +1397,7 @@
         console.error("room.js update:", err);
       }
       updateDimLabels();
+      updateSelectionOutline();
       vec3Of(
         camera.position ||
         camera.worldPosition ||

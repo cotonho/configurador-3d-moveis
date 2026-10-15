@@ -26,6 +26,29 @@
     return gc.defaultCollapsed !== false;
   }
 
+  // Abas da sidebar: "Móvel" (parâmetros da peça selecionada) e "Móveis"
+  // (catálogo para adicionar peças). Roda fora do init THREE: DOM já pronto.
+  function initTabs() {
+    const t1 = document.getElementById("tab-furniture");
+    const t2 = document.getElementById("tab-models");
+    const p1 = document.getElementById("pane-furniture");
+    const p2 = document.getElementById("pane-models");
+    if (!t1 || !t2 || !p1 || !p2) return;
+    function show(which) {
+      const first = which !== "models";
+      t1.classList.toggle("active", first);
+      t2.classList.toggle("active", !first);
+      t1.setAttribute("aria-selected", String(first));
+      t2.setAttribute("aria-selected", String(!first));
+      p1.hidden = !first;
+      p2.hidden = first;
+    }
+    t1.addEventListener("click", () => show("furniture"));
+    t2.addEventListener("click", () => show("models"));
+    window.showSideTab = show;
+  }
+  initTabs();
+
   function loadTHREE(callback) {
     if (window.THREE) {
       callback(window.THREE);
