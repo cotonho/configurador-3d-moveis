@@ -1067,7 +1067,7 @@
         if (!scene) return;
         const og = new THREE.BoxGeometry(1, 1, 1);
         const om = new THREE.LineBasicMaterial({
-          color: 0xffffff, depthTest: false, transparent: true, opacity: 0.9
+          color: 0xffffff, depthTest: true, transparent: true, opacity: 0.9
         });
         selectionOutline = new THREE.LineSegments(new THREE.EdgesGeometry(og), om);
         selectionOutline.visible = false;
