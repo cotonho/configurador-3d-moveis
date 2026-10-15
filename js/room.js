@@ -325,7 +325,7 @@
           group.updateMatrixWorld(true);
         }
       }
-      return { cx: cx, cy: cy, hx: hx, hy: hy, t: theta };
+      return { cx: cx, cy: cy, hx: hx, hy: hy, t: theta, z0: cur.min.z, z1: cur.max.z };
     }
 
     // Sobreposição OBB x OBB em 2D (eixos separadores): testa os 4 eixos
@@ -1054,25 +1054,35 @@
       return Math.round(v) + " cm";
     }
 
-    // Contorno branco da peça selecionada (Box3Helper atualizado por frame).
-    // Usa a box filtrada (mesmo critério das cotas): gigantes espúrios não
-    // entram no contorno. Escondido sem seleção ou com cotas desligadas.
-    let selectionHelper = null;
+    // Contorno branco da peça selecionada: caixa de linhas ORIENTADA (gira
+    // junto com o móvel). Box3Helper não serve — só desenha AABB (que só
+    // expande/encolhe). Usa a OBB da colisão + z da box filtrada (giro em Z
+    // não muda o z). Várias raízes: união AABB (sem orientação única).
+    let selectionOutline = null;
     const outlineBox = new THREE.Box3();
     function updateSelectionOutline() {
       if (!dimsOn) {
-        if (selectionHelper) selectionHelper.visible = false;
+        if (selectionOutline) selectionOutline.visible = false;
         return;
       }
-      if (!selectionHelper) {
+      if (!selectionOutline) {
         if (!scene) return;
-        selectionHelper = new THREE.Box3Helper(new THREE.Box3(), 0xffffff);
-        selectionHelper.visible = false;
-        selectionHelper.material.depthTest = false;
-        selectionHelper.material.transparent = true;
-        selectionHelper.material.opacity = 0.9;
-        selectionHelper.renderOrder = 998;
-        scene.add(selectionHelper);
+        const og = new THREE.BoxGeometry(1, 1, 1);
+        const om = new THREE.LineBasicMaterial({
+          color: 0xffffff, depthTest: false, transparent: true, opacity: 0.9
+        });
+        selectionOutline = new THREE.LineSegments(new THREE.EdgesGeometry(og), om);
+        selectionOutline.visible = false;
+        selectionOutline.frustumCulled = false;
+        selectionOutline.renderOrder = 998;
+        scene.add(selectionOutline);
+      }
+      function setBox(cx, cy, cz, sx, sy, sz, rot) {
+        selectionOutline.position.set(cx, cy, cz);
+        selectionOutline.rotation.set(0, 0, rot);
+        selectionOutline.scale.set(
+          Math.max(sx, 0.001), Math.max(sy, 0.001), Math.max(sz, 0.001));
+        selectionOutline.visible = true;
       }
       let roots = null;
       try {
@@ -1081,20 +1091,38 @@
         roots = null;
       }
       if (!roots || !roots.length) {
-        selectionHelper.visible = false;
+        selectionOutline.visible = false;
+        return;
+      }
+      const live = roots.filter((r) => r && r.parent);
+      if (!live.length) {
+        selectionOutline.visible = false;
+        return;
+      }
+      if (live.length === 1) {
+        const ob = collisionOBBFor(live[0]);
+        if (!ob || ob.hx <= 0 || ob.hy <= 0 || ob.z1 <= ob.z0) {
+          selectionOutline.visible = false;
+          return;
+        }
+        setBox(ob.cx, ob.cy, (ob.z0 + ob.z1) / 2,
+          ob.hx * 2, ob.hy * 2, ob.z1 - ob.z0, ob.t);
         return;
       }
       outlineBox.makeEmpty();
-      roots.forEach((r) => {
-        if (!r || !r.parent) return;
+      live.forEach((r) => {
         outlineBox.union(filteredBoxFor(r));
       });
       if (outlineBox.isEmpty()) {
-        selectionHelper.visible = false;
+        selectionOutline.visible = false;
         return;
       }
-      selectionHelper.box.copy(outlineBox);
-      selectionHelper.visible = true;
+      setBox((outlineBox.min.x + outlineBox.max.x) / 2,
+        (outlineBox.min.y + outlineBox.max.y) / 2,
+        (outlineBox.min.z + outlineBox.max.z) / 2,
+        outlineBox.max.x - outlineBox.min.x,
+        outlineBox.max.y - outlineBox.min.y,
+        outlineBox.max.z - outlineBox.min.z, 0);
     }
 
     // Yaw do(s) móvel(is) medido(s) — nunca global: com 2+ peças, o giro de
