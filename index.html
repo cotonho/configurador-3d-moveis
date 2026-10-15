@@ -17,6 +17,7 @@
         <button id="tab-furniture" class="side-tab active" type="button" role="tab" aria-selected="true">Parametros</button>
         <button id="tab-models" class="side-tab" type="button" role="tab" aria-selected="false">Móveis</button>
       </div>
+      <div id="side-scroll">
       <div id="pane-furniture" role="tabpanel">
         <h2 id="side-panel-title">Atributos do movel</h2>
         <div id="float-actions">
@@ -43,6 +44,10 @@
         <div id="add-model-status" class="control-hint"></div>
       </div>
       </div>
+      <div class="price-box">
+        <span>Preco estimado:</span>
+        <strong id="price">-</strong>
+      </div>
     </aside>
     <section class="viewer-wrap">
       <div id="canvas-container">
@@ -53,12 +58,6 @@
       </div>
     </section>
   </main>
-  <footer id="bottom-bar">
-    <div class="price-box">
-      <span>Preco estimado:</span>
-      <strong id="price">-</strong>
-    </div>
-  </footer>
 
   <script src="js/viewer-loader.js"></script>
   <script src="js/config.js"></script>
