@@ -349,20 +349,63 @@
     // true se algum OBB de roots colide com OBB de outro grupo posicionado.
     window.furnitureOverlapsAny = function (roots) {
       try {
-        const mine = (roots || []).map(collisionOBBFor).filter(Boolean);
-        if (!mine.length) return false;
-        for (const o of scaledFurniture) {
-          if (!o || !o.parent) continue;
-          if (roots.indexOf(o) !== -1) continue;
-          const ob = collisionOBBFor(o);
-          if (!ob) continue;
-          for (const m of mine) {
-            if (obbOverlap2D(m, ob)) return true;
-          }
-        }
-        return false;
+        return window.furnitureOverlapPenalty(roots) > 0;
       } catch (e) {
         return false;
+      }
+    };
+
+    // Mesma subárvore (um contém o outro, qualquer direção): nunca é
+    // "colisão" — raiz arrastada vs próprios subgrupos, mesma aula dos tops.
+    function treeRelated(a, b) {
+      let c = a;
+      while (c) {
+        if (c === b) return true;
+        c = c.parent;
+      }
+      c = b;
+      while (c) {
+        if (c === a) return true;
+        c = c.parent;
+      }
+      return false;
+    }
+
+    // Penetração total OBB x OBB (soma dos eixos): 0 = livre. Serve de
+    // medida de melhora — peça que começa sobreposta pode sair, desde que
+    // a penetração diminua (senão ela congela para sempre no restore).
+    function obbPenetration(a, b) {
+      const cax = Math.cos(a.t), sax = Math.sin(a.t);
+      const cbx = Math.cos(b.t), sbx = Math.sin(b.t);
+      const axes = [[cax, sax], [-sax, cax], [cbx, sbx], [-sbx, cbx]];
+      let pen = 0;
+      for (const [ux, uy] of axes) {
+        const da = Math.abs(
+          (a.cx * ux + a.cy * uy) - (b.cx * ux + b.cy * uy));
+        const ra = a.hx * Math.abs(ux * cax + uy * sax) +
+          a.hy * Math.abs(-ux * sax + uy * cax);
+        const rb = b.hx * Math.abs(ux * cbx + uy * sbx) +
+          b.hy * Math.abs(-ux * sbx + uy * cbx);
+        if (ra + rb > da) pen += ra + rb - da;
+      }
+      return pen;
+    }
+
+    window.furnitureOverlapPenalty = function (roots) {
+      try {
+        const mine = (roots || []).map(collisionOBBFor).filter(Boolean);
+        if (!mine.length) return 0;
+        let pen = 0;
+        for (const o of scaledFurniture) {
+          if (!o || !o.parent) continue;
+          if ((roots || []).some((r) => r === o || treeRelated(r, o))) continue;
+          const ob = collisionOBBFor(o);
+          if (!ob) continue;
+          for (const m of mine) pen += obbPenetration(m, ob);
+        }
+        return pen;
+      } catch (e) {
+        return 0;
       }
     };
 

@@ -258,6 +258,20 @@
           g.updateMatrixWorld(true);
         });
       }
+      // Penalidade atual (0 = livre). Aceita o movimento se zerar ou se
+      // DIMINUIR a penetração — peça que começa sobreposta consegue sair
+      // (só é desfeito o movimento que mantém ou piora a sobreposição).
+      const EPS_PEN = 1e-6;
+      function currentPenalty() {
+        if (typeof window.furnitureOverlapPenalty === "function") {
+          try {
+            const p = window.furnitureOverlapPenalty(d.roots);
+            return typeof p === "number" && isFinite(p) && p > 0 ? p : 0;
+          } catch (e) {}
+        }
+        return hitsOthers() ? 1 : 0;
+      }
+      const penBefore = collideOn ? currentPenalty() : 0;
       let moved = false;
       if (!collideOn) {
         applyMove(mx, my);
@@ -267,7 +281,8 @@
         for (const [dx, dy] of opts) {
           if (!dx && !dy) continue;
           applyMove(dx, dy);
-          if (!hitsOthers()) {
+          const penAfter = currentPenalty();
+          if (penAfter <= EPS_PEN || penAfter < penBefore) {
             moved = true;
             break;
           }
