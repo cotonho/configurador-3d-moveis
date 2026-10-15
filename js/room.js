@@ -295,6 +295,77 @@
     // Box filtrada p/ colisão no arrasto (mesmo critério do spawn/cotas).
     window.furnitureCollisionBox = filteredBoxFor;
 
+    // OBB 2D p/ colisão: centro da AABB atual (p/ um retângulo, o centro da
+    // AABB coincide com o centro do retângulo em qualquer giro, por simetria
+    // central) + meias-extensões medidas com o yaw zerado + ângulo atual.
+    // AABB pura vira um "quadradão" em peça girada e bloqueia à toa.
+    function collisionOBBFor(group) {
+      const cur = filteredBoxFor(group);
+      if (cur.isEmpty()) return null;
+      const cx = (cur.min.x + cur.max.x) / 2;
+      const cy = (cur.min.y + cur.max.y) / 2;
+      const u = group.userData || {};
+      const theta = group.rotation && typeof group.rotation.z === "number"
+        ? group.rotation.z : 0;
+      let hx = (cur.max.x - cur.min.x) / 2;
+      let hy = (cur.max.y - cur.min.y) / 2;
+      const base = typeof u._rotBase === "number" ? u._rotBase : null;
+      if (base !== null && group.rotation && group.rotation.z !== base) {
+        const saved = group.rotation.z;
+        group.rotation.z = base;
+        group.updateMatrixWorld(true);
+        try {
+          const b0 = filteredBoxFor(group);
+          if (!b0.isEmpty()) {
+            hx = (b0.max.x - b0.min.x) / 2;
+            hy = (b0.max.y - b0.min.y) / 2;
+          }
+        } finally {
+          group.rotation.z = saved;
+          group.updateMatrixWorld(true);
+        }
+      }
+      return { cx: cx, cy: cy, hx: hx, hy: hy, t: theta };
+    }
+
+    // Sobreposição OBB x OBB em 2D (eixos separadores): testa os 4 eixos
+    // locais; se algum separa, não há colisão.
+    function obbOverlap2D(a, b) {
+      const cax = Math.cos(a.t), sax = Math.sin(a.t);
+      const cbx = Math.cos(b.t), sbx = Math.sin(b.t);
+      const axes = [[cax, sax], [-sax, cax], [cbx, sbx], [-sbx, cbx]];
+      const pa0 = a.cx, pa1 = a.cy, pb0 = b.cx, pb1 = b.cy;
+      for (const [ux, uy] of axes) {
+        const da = Math.abs(pa0 * ux + pa1 * uy - (pb0 * ux + pb1 * uy));
+        const ra = a.hx * Math.abs(ux * cax + uy * sax) +
+          a.hy * Math.abs(-ux * sax + uy * cax);
+        const rb = b.hx * Math.abs(ux * cbx + uy * sbx) +
+          b.hy * Math.abs(-ux * sbx + uy * cbx);
+        if (da > ra + rb) return false;
+      }
+      return true;
+    }
+
+    // true se algum OBB de roots colide com OBB de outro grupo posicionado.
+    window.furnitureOverlapsAny = function (roots) {
+      try {
+        const mine = (roots || []).map(collisionOBBFor).filter(Boolean);
+        if (!mine.length) return false;
+        for (const o of scaledFurniture) {
+          if (!o || !o.parent) continue;
+          if (roots.indexOf(o) !== -1) continue;
+          const ob = collisionOBBFor(o);
+          if (!ob) continue;
+          for (const m of mine) {
+            if (obbOverlap2D(m, ob)) return true;
+          }
+        }
+        return false;
+      } catch (e) {
+        return false;
+      }
+    };
+
     // cm por unidade do modelo de uma sessao (p/ converter o diag estimado).
     function cmPerUnitForUnits(units) {
       const sc = scaleForUnit(units || roomConfig.modelUnits || "in");
