@@ -20,7 +20,7 @@
         volume *= d;
       });
 
-      return config.basePrice + volume * (config.pricePerCubicMeter || 0);
+      return (Number(config.basePrice) || 0) + volume * (config.pricePerCubicMeter || 0);
     },
 
     format(value, currency) {

@@ -85,23 +85,26 @@ console.log("main.js carregado - v3-multisession");
     warningsEl.classList.toggle("visible", messages.length > 0);
   }
 
-  function renderPrice(values) {
-    priceEl.textContent = window.pricing.format(
-      window.pricing.calculate(values, config),
-      config.currency
-    );
-  }
-
-  // Soma o preço de todas as sessões (base por móvel + dimensões).
+  // Preço exibido = soma de todas as sessões, cada uma com sua própria regra
+  // de preço (catalog.js). Sessão sem price cai na config global.
   function totalPrice() {
     const api = window.shapediverAPI;
     if (typeof api.getSessions !== "function") {
       return window.pricing.calculate(currentValues(), config);
     }
-    return api.getSessions().reduce(
-      (sum, s) => sum + window.pricing.calculate(currentValues(s.id), config),
+    const sessions = api.getSessions();
+    if (!sessions.length) {
+      return 0;
+    }
+    return sessions.reduce(
+      (sum, s) =>
+        sum + window.pricing.calculate(currentValues(s.id), s.price || config),
       0
     );
+  }
+
+  function renderPrice() {
+    priceEl.textContent = window.pricing.format(totalPrice(), config.currency);
   }
 
   function applyConstraintsAndSend(param, proposedValue) {
@@ -377,7 +380,7 @@ console.log("main.js carregado - v3-multisession");
     input.addEventListener("input", () => {
       const value = restoreColorValue(input.value, param.value);
       window.shapediverAPI.setParameter(param, value);
-      renderPrice(currentValues());
+      renderPrice();
     });
 
     return row;
@@ -401,7 +404,7 @@ console.log("main.js carregado - v3-multisession");
 
     check.addEventListener("change", () => {
       window.shapediverAPI.setParameter(param, check.checked);
-      renderPrice(currentValues());
+      renderPrice();
     });
 
     return row;
@@ -453,7 +456,8 @@ console.log("main.js carregado - v3-multisession");
   window.controlsUI = {
     buildControl,
     applyConstraintsAndSend,
-    syncAll
+    syncAll,
+    refresh
   };
 
   function refresh() {

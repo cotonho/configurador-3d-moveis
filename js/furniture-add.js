@@ -55,7 +55,8 @@
             label: label,
             ticket: item.ticket,
             modelViewUrl: item.modelViewUrl,
-            modelUnits: item.modelUnits || null
+            modelUnits: item.modelUnits || null,
+            price: item.price || null
           });
           const viewport = api.getViewport();
           const session = api.getSession(added.id);
@@ -69,6 +70,12 @@
             getParameters: () => api.getParameters(added.id)
           });
           window.selectFurniture(added.id);
+          if (
+            window.controlsUI &&
+            typeof window.controlsUI.refresh === "function"
+          ) {
+            window.controlsUI.refresh();
+          }
           status("");
           btn.disabled = false;
         } catch (error) {

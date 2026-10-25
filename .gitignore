@@ -8,3 +8,6 @@ js/config.ticket.bak.js
 
 # Config local com o ticket do modelo (use config.example.js como base).
 js/config.js
+
+# Catálogo local com os tickets reais (use catalog.example.js como base).
+js/catalog.js

@@ -33,13 +33,17 @@ console.log("shapediver.js carregado - v3-multisession");
   }
 
   function modelsFromConfig(config) {
+    if (config.startupEmpty) {
+      return [];
+    }
     if (Array.isArray(config.models) && config.models.length) {
       return config.models.map((m, i) => ({
         id: m.id || "model" + (i + 1),
         label: m.label || m.id || "Movel " + (i + 1),
         ticket: m.ticket,
         modelViewUrl: m.modelViewUrl,
-        modelUnits: m.modelUnits || null
+        modelUnits: m.modelUnits || null,
+        price: m.price || null
       }));
     }
     return [
@@ -47,7 +51,13 @@ console.log("shapediver.js carregado - v3-multisession");
         id: "main",
         label: config.productName || "Movel",
         ticket: config.ticket,
-        modelViewUrl: config.modelViewUrl
+        modelViewUrl: config.modelViewUrl,
+        modelUnits: config.modelUnits || null,
+        price: {
+          basePrice: config.basePrice,
+          pricePerCubicMeter: config.pricePerCubicMeter,
+          priceDimensions: config.priceDimensions
+        }
       }
     ];
   }
@@ -105,7 +115,13 @@ console.log("shapediver.js carregado - v3-multisession");
           modelViewUrl: m.modelViewUrl,
           id: m.id + "Session"
         });
-        sessions.set(m.id, { id: m.id, label: m.label, session: session });
+        sessions.set(m.id, {
+          id: m.id,
+          label: m.label,
+          session: session,
+          modelUnits: m.modelUnits || null,
+          price: m.price || null
+        });
         sessionOrder.push(m.id);
         session.updateCallback = function () {
           if (onChanged) {
@@ -156,7 +172,8 @@ console.log("shapediver.js carregado - v3-multisession");
         id: id,
         label: label,
         session: session,
-        modelUnits: m.modelUnits || null
+        modelUnits: m.modelUnits || null,
+        price: m.price || null
       });
       sessionOrder.push(id);
       session.updateCallback = function () {
@@ -164,7 +181,12 @@ console.log("shapediver.js carregado - v3-multisession");
           onChanged();
         }
       };
-      return { id: id, label: label, modelUnits: m.modelUnits || null };
+      return {
+        id: id,
+        label: label,
+        modelUnits: m.modelUnits || null,
+        price: m.price || null
+      };
     },
 
     getSessions() {
@@ -174,7 +196,8 @@ console.log("shapediver.js carregado - v3-multisession");
           id: entry.id,
           label: entry.label,
           session: entry.session,
-          modelUnits: entry.modelUnits || null
+          modelUnits: entry.modelUnits || null,
+          price: entry.price || null
         };
       });
     },
